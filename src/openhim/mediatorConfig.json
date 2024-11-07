@@ -1,0 +1,18 @@
+{
+  "urn": "urn:mediator:climate-mediator",
+  "version": "0.0.1",
+  "name": "Climate Mediator",
+  "description": "Processes climate-related data as an example of unstructured data handling",
+  "defaultChannelConfig": [],
+  "endpoints": [
+    {
+      "name": "Climate Endpoint",
+      "host": "climate-mediator",
+      "path": "/test",
+      "port": "3000",
+      "primary": true,
+      "type": "http"
+    }
+  ],
+  "configDefs": []
+}
