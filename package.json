@@ -10,7 +10,7 @@
     "start": "ts-node -r dotenv/config src/index.ts",
     "format": "prettier --check --write '{src,tests}/**/*.ts'",
     "lint": "eslint . --ext .ts,.js --fix",
-    "build": "tsc",
+    "build": "npm install; tsc -p tsconfig.build.json",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
