@@ -1,0 +1,37 @@
+{
+  "name": "climate-mediator",
+  "version": "1.0.0",
+  "description": "Processes climate-related data as an example of unstructured data handling",
+  "repository": "git@github.com:jembi/climate-mediator.git",
+  "author": "Jembi Health Systems NPC",
+  "main": "index.ts",
+  "scripts": {
+    "dev": "nodemon --config restart.json",
+    "start": "ts-node -r dotenv/config src/index.ts",
+    "format": "prettier --check --write '{src,tests}/**/*.ts'",
+    "lint": "eslint . --ext .ts,.js --fix",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "license": "ISC",
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@typescript-eslint/eslint-plugin": "^8.13.0",
+    "@typescript-eslint/parser": "^8.13.0",
+    "eslint": "^9.14.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.3.3",
+    "ts-jest": "^29.2.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.3"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.18.2",
+    "express-async-handler": "^1.2.0",
+    "http-proxy-middleware": "^2.0.6",
+    "openhim-mediator-utils": "^0.2.4",
+    "winston": "^3.16.0"
+  }
+}
