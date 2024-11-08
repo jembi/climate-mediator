@@ -1,9 +1,9 @@
 import express from "express";
-import { getConfig } from "../config/config";
+import { config } from "../config/config";
 
 const routes = express.Router();
 
-const { bodySizeLimit } = getConfig();
+const bodySizeLimit = config.bodySizeLimit;
 const jsonBodyParser = express.json({
   type: "application/json",
   limit: bodySizeLimit,

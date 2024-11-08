@@ -1,4 +1,4 @@
-export type LogLevel = "debug" | "info" | "warn" | "error" | "silent";
+import { LogLevel } from "../types/mediatorConfig";
 
 export interface Config {
   port: number;

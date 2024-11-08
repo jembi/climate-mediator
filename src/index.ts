@@ -1,11 +1,10 @@
 import express from "express";
 import path from "path";
-import { getConfig } from "./config/config";
+import { config } from "./config/config";
 import logger from "./logger";
 import routes from "./routes/index";
 import { setupMediator } from "./openhim/openhim";
 
-const config = getConfig();
 const app = express();
 
 app.use("/", routes);

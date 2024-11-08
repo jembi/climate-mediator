@@ -25,3 +25,4 @@ interface Route {
   primary: boolean;
   type: string;
 }
+export type LogLevel = "debug" | "info" | "warn" | "error" | "silent";

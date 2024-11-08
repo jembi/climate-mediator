@@ -1,7 +1,7 @@
 import logger from "../logger";
 import { MediatorConfig } from "../types/mediatorConfig";
 import { RequestOptions } from "../types/request";
-import { getConfig } from "../config/config";
+import { config } from "../config/config";
 import {
   activateHeartbeat,
   fetchConfig,
@@ -24,7 +24,6 @@ const resolveMediatorConfig = (
 };
 
 const resolveOpenhimConfig = (urn: string): RequestOptions => {
-  const config = getConfig();
 
   return {
     username: config.openhimUsername,
