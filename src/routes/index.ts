@@ -5,7 +5,7 @@ const routes = express.Router();
 
 const { bodySizeLimit } = getConfig();
 const jsonBodyParser = express.json({
-  type: "application/fhir+json",
+  type: "application/json",
   limit: bodySizeLimit,
 });
 
