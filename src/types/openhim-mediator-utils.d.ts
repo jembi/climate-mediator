@@ -1,1 +1,1 @@
-declare module "openhim-mediator-utils";
+declare module 'openhim-mediator-utils';

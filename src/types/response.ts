@@ -21,7 +21,7 @@ export interface Orchestration {
   response: Response;
 }
 export interface OpenHimResponseObject {
-  "x-mediator-urn": string;
+  'x-mediator-urn': string;
   status: string;
   response: Response;
   orchestrations: Orchestration[];

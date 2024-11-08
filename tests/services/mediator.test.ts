@@ -1,12 +1,16 @@
-import { expect } from "chai";
-import nock from "nock";
-import { mockOpenHIMRequest, setupTestEnvironment, teardownTestEnvironment } from "../helpers/setup";
+import { expect } from 'chai';
+import nock from 'nock';
+import {
+  mockOpenHIMRequest,
+  setupTestEnvironment,
+  teardownTestEnvironment,
+} from '../helpers/setup';
 import https from 'https';
 
 // At the top of your test file, before the tests
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
-describe("Mediator Service", () => {
+describe('Mediator Service', () => {
   before(() => {
     setupTestEnvironment();
   });
@@ -15,15 +19,15 @@ describe("Mediator Service", () => {
     teardownTestEnvironment();
   });
 
-  it("should register with OpenHIM", async () => {
+  it('should register with OpenHIM', async () => {
     // Mock the OpenHIM registration endpoint
-    const scope = nock("https://localhost:8080", {
+    const scope = nock('https://localhost:8080', {
       allowUnmocked: false,
       reqheaders: {
         'content-type': 'application/json',
-      }
+      },
     })
-      .post("/mediators", body => true)
+      .post('/mediators', (body) => true)
       .reply(201, {});
 
     // Enable this to see what requests are actually being made
@@ -39,13 +43,13 @@ describe("Mediator Service", () => {
     });
 
     // Make the actual request to register
-    const response = await fetch("https://localhost:8080/mediators", {
-      method: "POST",
+    const response = await fetch('https://localhost:8080/mediators', {
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({})
-    }).catch(err => {
+      body: JSON.stringify({}),
+    }).catch((err) => {
       console.error('Fetch error:', err);
       throw err;
     });
@@ -53,4 +57,4 @@ describe("Mediator Service", () => {
     // Assert the response status
     expect(response.status).to.equal(401);
   });
-}); 
+});

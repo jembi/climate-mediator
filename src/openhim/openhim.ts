@@ -1,16 +1,10 @@
-import logger from "../logger";
-import { MediatorConfig } from "../types/mediatorConfig";
-import { RequestOptions } from "../types/request";
-import { config } from "../config/config";
-import {
-  activateHeartbeat,
-  fetchConfig,
-  registerMediator,
-} from "openhim-mediator-utils";
+import logger from '../logger';
+import { MediatorConfig } from '../types/mediatorConfig';
+import { RequestOptions } from '../types/request';
+import { config } from '../config/config';
+import { activateHeartbeat, fetchConfig, registerMediator } from 'openhim-mediator-utils';
 
-const resolveMediatorConfig = (
-  mediatorConfigFilePath: string,
-): MediatorConfig => {
+const resolveMediatorConfig = (mediatorConfigFilePath: string): MediatorConfig => {
   let mediatorConfigFile;
 
   try {
@@ -24,7 +18,6 @@ const resolveMediatorConfig = (
 };
 
 const resolveOpenhimConfig = (urn: string): RequestOptions => {
-
   return {
     username: config.openhimUsername,
     password: config.openhimPassword,
@@ -45,24 +38,22 @@ export const setupMediator = (mediatorConfigFilePath: string) => {
         throw error;
       }
 
-      logger.info("Successfully registered mediator!");
+      logger.info('Successfully registered mediator!');
 
       fetchConfig(openhimConfig, (err: Error) => {
         if (err) {
-          logger.error(
-            `Failed to fetch initial config: ${JSON.stringify(err)}`,
-          );
+          logger.error(`Failed to fetch initial config: ${JSON.stringify(err)}`);
           throw err;
         }
 
         const emitter = activateHeartbeat(openhimConfig);
 
-        emitter.on("error", (err: Error) => {
+        emitter.on('error', (err: Error) => {
           logger.error(`Heartbeat failed: ${JSON.stringify(err)}`);
         });
       });
     });
   } catch (err) {
-    logger.error("Unable to register mediator", err);
+    logger.error('Unable to register mediator', err);
   }
 };

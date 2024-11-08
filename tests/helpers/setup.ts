@@ -1,6 +1,6 @@
-import chai from "chai";
-import nock from "nock";
-import { config } from "../../src/config/config";
+import chai from 'chai';
+import nock from 'nock';
+import { config } from '../../src/config/config';
 
 export const mockConfig = {
   ...config,
@@ -11,7 +11,7 @@ export const setupTestEnvironment = (): void => {
   // Disable real HTTP requests during tests
   nock.disableNetConnect();
   // Allow localhost connections for local testing
-  nock.enableNetConnect("127.0.0.1");
+  nock.enableNetConnect('127.0.0.1');
 };
 
 export const teardownTestEnvironment = (): void => {
@@ -23,7 +23,5 @@ export const teardownTestEnvironment = (): void => {
 
 // Example of how to use nock to mock HTTP requests
 export const mockOpenHIMRequest = (): nock.Scope => {
-  return nock("https://localhost:8080")
-    .post("/mediators")
-    .reply(201, { success: true });
-}; 
+  return nock('https://localhost:8080').post('/mediators').reply(201, { success: true });
+};
