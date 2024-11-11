@@ -18,5 +18,15 @@ export const getConfig = () => {
     trustSelfSigned: process.env.TRUST_SELF_SIGNED === "false" ? false : true,
     runningMode: process.env.MODE || "",
     bodySizeLimit: process.env.BODY_SIZE_LIMIT || "50mb",
+    minio: {
+      endPoint: process.env.MINIO_ENDPOINT || "localhost",
+      port: process.env.MINIO_PORT ? parseInt(process.env.MINIO_PORT) : 9000,
+      useSSL: process.env.MINIO_USE_SSL === "false" ? false : true,
+      bucket: process.env.MINIO_BUCKET || "climate-mediator",
+      accessKey: process.env.MINIO_ACCESS_KEY || "tCroZpZ3usDUcvPM3QT6",
+      secretKey: process.env.MINIO_SECRET_KEY || "suVjMHUpVIGyWx8fFJHTiZiT88dHhKgVpzvYTOKK",
+      prefix: process.env.MINIO_PREFIX || "",
+      suffix: process.env.MINIO_SUFFIX || "",
+    },
   });
 };
