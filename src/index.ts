@@ -8,22 +8,22 @@ import { setupMediator } from "./openhim/openhim";
 import { validateJsonFile, validateCsvFile } from "./utils/file-validators";
 import { readFile, rm } from "fs/promises";
 
-const config = getConfig();
+
 const app = express();
 
-app.use("/", routes);
+app.use('/', routes);
 
-if (config.runningMode !== "testing") {
-  app.listen(config.port, () => {
-    logger.info(`Server is running on port - ${config.port}`);
+if (getConfig().runningMode !== 'testing') {
+  app.listen(getConfig().port, () => {
+    logger.info(`Server is running on port - ${getConfig().port}`);
 
-    if (config.registerMediator) {
-      setupMediator(path.resolve(__dirname, "./openhim/mediatorConfig.json"));
+    if (getConfig().registerMediator) {
+      setupMediator(path.resolve(__dirname, './openhim/mediatorConfig.json'));
     }
   });
 }
 
-const { bucket, endPoint, port, useSSL, accessKey, secretKey, prefix, suffix } = config.minio
+const { bucket, endPoint, port, useSSL, accessKey, secretKey, prefix, suffix } = getConfig().minio
 
 const minioClient = new Minio.Client({
   endPoint,

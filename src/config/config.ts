@@ -1,9 +1,15 @@
-enum LogLevel {
-  debug = "debug",
-  info = "info",
-  warn = "warn",
-  error = "error",
-  silent = "silent",
+import { LogLevel } from '../types/mediatorConfig';
+
+export interface Config {
+  port: number;
+  logLevel: LogLevel;
+  registerMediator: boolean;
+  openhimMediatorUrl: string;
+  openhimUsername: string;
+  openhimPassword: string;
+  trustSelfSigned: boolean;
+  runningMode: string;
+  bodySizeLimit: string;
 }
 
 export const getConfig = () => {
@@ -28,5 +34,5 @@ export const getConfig = () => {
       prefix: process.env.MINIO_PREFIX || "",
       suffix: process.env.MINIO_SUFFIX || "",
     },
-  });
-};
+  })
+}
