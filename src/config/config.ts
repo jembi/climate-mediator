@@ -34,5 +34,8 @@ export const getConfig = () => {
       prefix: process.env.MINIO_PREFIX || "",
       suffix: process.env.MINIO_SUFFIX || "",
     },
+    clickhouse: {
+      url: process.env.CLICKHOUSE_URL || "http://localhost:8123",
+    },
   })
 }
