@@ -1,4 +1,4 @@
-name: Build and Push jembi/climate-mediator image
+name: Build & Push Climate Mediator image
 
 on:
   push:
