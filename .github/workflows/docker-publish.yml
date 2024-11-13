@@ -9,6 +9,7 @@ on:
 
 jobs:
   build-and-push:
+    environment: dockerhub
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
