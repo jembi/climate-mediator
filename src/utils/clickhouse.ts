@@ -20,7 +20,7 @@ export async function createTable(fields: string[], tableName: string) {
     });
     logger.debug(`Table ${normalizedTableName} exists`);
     await client.close();
-    return;
+    return false;
   } catch (error) {
     logger.debug(`Table ${normalizedTableName} does not exist, now creating...`);
   }
@@ -34,10 +34,11 @@ export async function createTable(fields: string[], tableName: string) {
   } catch (error) {
     console.log('Error checking/creating table');
     console.error(error);
+    return false;
   }
 
   await client.close();
-  return;
+  return true;
 }
 
 export function generateDDL(fields: string[], tableName: string) {
