@@ -20,5 +20,3 @@ export function getCsvHeaders(file: Buffer) {
 
   return columns;
 }
-
-

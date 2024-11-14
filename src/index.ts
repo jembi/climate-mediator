@@ -9,7 +9,6 @@ import { validateJsonFile, getCsvHeaders } from './utils/file-validators';
 import { readFile, rm } from 'fs/promises';
 import { createTable, flattenJson } from './utils/clickhouse';
 
-
 const app = express();
 
 app.use('/', routes);
@@ -46,7 +45,7 @@ async function setupMinio() {
   listener.on('notification', async (notification) => {
     //@ts-ignore
     const file = notification.s3.object.key;
-    
+
     //@ts-ignore
     const tableName = notification.s3.bucket.name;
 

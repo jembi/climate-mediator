@@ -5,7 +5,6 @@ import logger from '../logger';
 const { clickhouse } = getConfig();
 const { url, password } = clickhouse;
 
-
 export async function createTable(fields: string[], tableName: string) {
   const client = createClient({
     url,
@@ -17,7 +16,7 @@ export async function createTable(fields: string[], tableName: string) {
   try {
     logger.debug(`Checking if table ${normalizedTableName} exists...`);
     const existsResult = await client.query({
-      query: `desc ${normalizedTableName}`
+      query: `desc ${normalizedTableName}`,
     });
     logger.debug(`Table ${normalizedTableName} exists`);
     await client.close();
@@ -44,19 +43,19 @@ export async function createTable(fields: string[], tableName: string) {
 export function generateDDL(fields: string[], tableName: string) {
   return `CREATE TABLE IF NOT EXISTS ${tableName} (
     table_id UUID DEFAULT generateUUIDv4(),
-    ${fields.map((field) => `${field} VARCHAR`).join(", ")}
+    ${fields.map((field) => `${field} VARCHAR`).join(', ')}
   )
   ENGINE = MergeTree
   ORDER BY (table_id)
   `;
 }
 
-export function flattenJson(json: any, prefix = ""): string[] {
+export function flattenJson(json: any, prefix = ''): string[] {
   const fields: string[] = [];
   Object.keys(json).forEach((key) => {
     const value = json[key];
-    if (typeof value === "object") {
-      if (key === "main") {
+    if (typeof value === 'object') {
+      if (key === 'main') {
         fields.push(...flattenJson(value));
       } else {
         // This is to avoid having a prefix starting with numbers
