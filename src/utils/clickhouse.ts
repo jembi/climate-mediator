@@ -1,26 +1,54 @@
 import { createClient } from '@clickhouse/client';
 import { getConfig } from '../config/config';
+import logger from '../logger';
 
 const { clickhouse } = getConfig();
-const { url } = clickhouse;
+const { url, password } = clickhouse;
 
 
 export async function createTable(fields: string[], tableName: string) {
   const client = createClient({
     url,
-  });
-  await client.query({
-    query: generateDDL(fields, tableName),
+    password,
   });
 
+  const normalizedTableName = tableName.replace(/-/g, '_');
+
+  try {
+    logger.debug(`Checking if table ${normalizedTableName} exists...`);
+    const existsResult = await client.query({
+      query: `desc ${normalizedTableName}`
+    });
+    logger.debug(`Table ${normalizedTableName} exists`);
+    await client.close();
+    return;
+  } catch (error) {
+    logger.debug(`Table ${normalizedTableName} does not exist, now creating...`);
+  }
+
+  try {
+    console.debug(`Creating table ${normalizedTableName} with fields ${fields.join(', ')}`);
+    const result = await client.query({
+      query: generateDDL(fields, normalizedTableName),
+    });
+    console.log('Table created successfully');
+  } catch (error) {
+    console.log('Error checking/creating table');
+    console.error(error);
+  }
+
   await client.close();
+  return;
 }
 
 export function generateDDL(fields: string[], tableName: string) {
   return `CREATE TABLE IF NOT EXISTS ${tableName} (
+    table_id UUID DEFAULT generateUUIDv4(),
     ${fields.map((field) => `${field} VARCHAR`).join(", ")}
   )
-  ENGINE = MergeTree`;
+  ENGINE = MergeTree
+  ORDER BY (table_id)
+  `;
 }
 
 export function flattenJson(json: any, prefix = ""): string[] {

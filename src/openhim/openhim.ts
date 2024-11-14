@@ -1,8 +1,10 @@
 import logger from '../logger';
 import { MediatorConfig } from '../types/mediatorConfig';
 import { RequestOptions } from '../types/request';
-import { config } from '../config/config';
+import { getConfig } from '../config/config';
 import { activateHeartbeat, fetchConfig, registerMediator } from 'openhim-mediator-utils';
+
+const { openhimUsername, openhimPassword, openhimMediatorUrl, trustSelfSigned } = getConfig();
 
 const resolveMediatorConfig = (mediatorConfigFilePath: string): MediatorConfig => {
   let mediatorConfigFile;
@@ -19,10 +21,10 @@ const resolveMediatorConfig = (mediatorConfigFilePath: string): MediatorConfig =
 
 const resolveOpenhimConfig = (urn: string): RequestOptions => {
   return {
-    username: config.openhimUsername,
-    password: config.openhimPassword,
-    apiURL: config.openhimMediatorUrl,
-    trustSelfSigned: config.trustSelfSigned,
+    username: openhimUsername,
+    password: openhimPassword,
+    apiURL: openhimMediatorUrl,
+    trustSelfSigned: trustSelfSigned,
     urn: urn,
   };
 };

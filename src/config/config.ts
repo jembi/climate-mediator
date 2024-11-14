@@ -27,7 +27,7 @@ export const getConfig = () => {
     minio: {
       endPoint: process.env.MINIO_ENDPOINT || "localhost",
       port: process.env.MINIO_PORT ? parseInt(process.env.MINIO_PORT) : 9000,
-      useSSL: process.env.MINIO_USE_SSL === "false" ? false : true,
+      useSSL: process.env.MINIO_USE_SSL === "true" ? true : false,
       bucket: process.env.MINIO_BUCKET || "climate-mediator",
       accessKey: process.env.MINIO_ACCESS_KEY || "tCroZpZ3usDUcvPM3QT6",
       secretKey: process.env.MINIO_SECRET_KEY || "suVjMHUpVIGyWx8fFJHTiZiT88dHhKgVpzvYTOKK",
@@ -36,6 +36,8 @@ export const getConfig = () => {
     },
     clickhouse: {
       url: process.env.CLICKHOUSE_URL || "http://localhost:8123",
+      user: process.env.CLICKHOUSE_USER || "",
+      password: process.env.CLICKHOUSE_PASSWORD || "dev_password_only",
     },
   })
 }
