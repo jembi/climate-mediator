@@ -27,7 +27,6 @@ async function setupMinio() {
   const { bucket, endPoint, port, useSSL, accessKey, secretKey, prefix, suffix } =
     getConfig().minio;
 
-  //TODO: This method of connecting to Minio does not indicate if there was an issue when connecting, find an alternative way of checking
   const minioClient = new Minio.Client({
     endPoint,
     port,
@@ -36,8 +35,14 @@ async function setupMinio() {
     secretKey,
   });
 
-  logger.info(`Successfully connected to Minio at ${endPoint}:${port}`);
-
+  try {
+    // Test connection by attempting to list buckets
+    await minioClient.listBuckets();
+    logger.info(`Successfully connected to Minio at ${endPoint}:${port}/${bucket}`);
+  } catch (error) {
+    logger.error(`Failed to connect to Minio: ${error}`);
+    throw error;
+  }
   const listener = minioClient.listenBucketNotification(bucket, prefix, suffix, [
     's3:ObjectCreated:*',
   ]);

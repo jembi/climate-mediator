@@ -15,13 +15,18 @@ const jsonBodyParser = express.json({
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-routes.post('/upload/:bucket', upload.single('file'), async(req, res) => {
+routes.post('/upload', upload.single('file'), async (req, res) => {
   const file = req.file;
-  const bucket = req.params.bucket;
+  const bucket = req.query.bucket;
 
   if (!file) {
     logger.error('No file uploaded');
     return res.status(400).send('No file uploaded');
+  }
+
+  if (!bucket) {
+    logger.error('No bucket provided');
+    return res.status(400).send('No bucket provided');
   }
 
   const headers = getCsvHeaders(file.buffer);
@@ -30,10 +35,12 @@ routes.post('/upload/:bucket', upload.single('file'), async(req, res) => {
     return res.status(400).send('Invalid file type, please upload a valid CSV file');
   }
 
-  const tableCreated = await createTable(headers, bucket);
+  const tableCreated = await createTable(headers, bucket as string);
 
   if (!tableCreated) {
-    return res.status(500).send('Failed to create table, please check csv or use another name for the bucket');
+    return res
+      .status(500)
+      .send('Failed to create table, please check csv or use another name for the bucket');
   }
 
   return res.status(201).send('File uploaded successfully');
