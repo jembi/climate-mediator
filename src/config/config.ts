@@ -14,7 +14,7 @@ export interface Config {
 
 export const getConfig = () => {
   return Object.freeze({
-    port: process.env.SERVER_PORT || 3000,
+    port: Number.parseInt(process.env.SERVER_PORT || '3000'),
     logLevel: (process.env.LOG_LEVEL || 'debug') as LogLevel,
     registerMediator: process.env.REGISTER_MEDIATOR === 'false' ? false : true,
     openhimMediatorUrl: process.env.OPENHIM_MEDIATOR_URL || 'https://localhost:8080',
