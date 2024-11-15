@@ -1,9 +1,9 @@
 import chai from 'chai';
 import nock from 'nock';
-import { config } from '../../src/config/config';
+import { getConfig } from '../../src/config/config';
 
 export const mockConfig = {
-  ...config,
+  ...getConfig(),
   // Add any specific test configurations here
 };
 
