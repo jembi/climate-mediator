@@ -2,9 +2,10 @@ import express from 'express';
 import multer from 'multer';
 import { getConfig } from '../config/config';
 import { getCsvHeaders } from '../utils/file-validators';
-import { createTable } from '../utils/clickhouse';
 import logger from '../logger';
-
+import fs from 'fs';
+import path from 'path';
+import { uploadToMinio } from '../utils/minioClient';
 const routes = express.Router();
 
 const bodySizeLimit = getConfig().bodySizeLimit;
@@ -14,6 +15,21 @@ const jsonBodyParser = express.json({
 });
 
 const upload = multer({ storage: multer.memoryStorage() });
+
+const saveCsvToTmp = (fileBuffer: Buffer, fileName: string): string => {
+  const tmpDir = path.join(process.cwd(), 'tmp');
+  
+  // Create tmp directory if it doesn't exist
+  if (!fs.existsSync(tmpDir)) {
+    fs.mkdirSync(tmpDir);
+  }
+  
+  const fileUrl = path.join(tmpDir, fileName);
+  fs.writeFileSync(fileUrl, fileBuffer);
+  logger.info(`fileUrl: ${fileUrl}`);
+  
+  return fileUrl;
+};
 
 routes.post('/upload', upload.single('file'), async (req, res) => {
   const file = req.file;
@@ -34,14 +50,13 @@ routes.post('/upload', upload.single('file'), async (req, res) => {
   if (!headers) {
     return res.status(400).send('Invalid file type, please upload a valid CSV file');
   }
+  const fileUrl = saveCsvToTmp(file.buffer, file.originalname);
 
-  const tableCreated = await createTable(headers, bucket as string);
+  const uploadResult = await uploadToMinio(fileUrl,file.originalname, bucket as string);
+  // const tableCreated = await createTable(headers, bucket as string);
+  logger.info(`file created: ${file.originalname}`);
 
-  if (!tableCreated) {
-    return res
-      .status(500)
-      .send('Failed to create table, please check csv or use another name for the bucket');
-  }
+  fs.unlinkSync(fileUrl);
 
   return res.status(201).send('File uploaded successfully');
 });

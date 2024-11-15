@@ -73,3 +73,67 @@ export function flattenJson(json: any, prefix = ''): string[] {
   const fieldsSet = new Set(fields);
   return Array.from(fieldsSet);
 }
+
+export async function insertFromS3(tableName: string, s3Path: string, s3Config: {
+  accessKey: string,
+  secretKey: string
+}) {
+  logger.info(`Inside the insertFromS3 function`);
+  const client = createClient({
+    url,
+    password,
+  });
+  logger.info(`s3Path: ${s3Path}`);
+  const normalizedTableName = tableName.replace(/-/g, '_');
+
+  try {
+    logger.debug(`Inserting data into ${normalizedTableName} from ${s3Path}`);
+    const query = `
+      INSERT INTO \`default\`.${normalizedTableName} 
+      SELECT * FROM s3(
+        '${s3Path}',
+        '${s3Config.accessKey}',
+        '${s3Config.secretKey}',
+        'CSVWithNames'
+      )
+    `;
+    logger.debug(`Query: ${query}`);
+    await client.query({ query });
+    logger.info(`Successfully inserted data into ${normalizedTableName}`);
+    return true;
+  } catch (error) {
+    logger.error('Error inserting data from S3');
+    logger.error(error);
+    return false;
+  } finally {
+    await client.close();
+  }
+}
+
+export async function insertFromFile(tableName: string, filePath: string) {
+  const client = createClient({
+    url,
+    password,
+  });
+  logger.info(`filePath: ${filePath}`);
+  logger.info(`tableName: ${tableName}`);
+  const normalizedTableName = tableName.replace(/-/g, '_');
+
+  try {
+    logger.debug(`Inserting data into ${normalizedTableName} from ${filePath}`);
+    const query = `
+      INSERT INTO \`default\`.${normalizedTableName} 
+      SELECT * FROM file('${filePath}', 'CSVWithNames')
+    `;
+
+    await client.query({ query });
+    logger.info(`Successfully inserted data into ${normalizedTableName}`);
+    return true;
+  } catch (error) {
+    logger.error('Error inserting data from file');
+    logger.error(error);
+    return false;
+  } finally {
+    await client.close();
+  }
+}
