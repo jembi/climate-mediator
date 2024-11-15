@@ -1,0 +1,14 @@
+name: Run Climate Mediator Tests
+on: push
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install modules
+        run: npm i
+      
+      - name: Run tests
+        run: npm run test
+        
