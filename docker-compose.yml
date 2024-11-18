@@ -5,5 +5,11 @@ services:
       - 9000:9000
       - 9001:9001
     command: server /data --console-address ":9001"
-    volumes:
-      - ./minio:/data
+  clickhouse:
+    image: clickhouse/clickhouse-server:23.8.14.6
+    ports:
+      - 8123:8123
+      - 9002:9000
+    environment:
+      - CLICKHOUSE_PASSWORD=dev_password_only
+    

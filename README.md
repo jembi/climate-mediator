@@ -1,4 +1,5 @@
-# climate-mediator
+# Climate Mediator
+
 Processes climate-related data as an example of unstructured data handling
 
 ## Local Development Setup
