@@ -6,6 +6,7 @@ import logger from '../logger';
 import fs from 'fs';
 import path from 'path';
 import { uploadToMinio } from '../utils/minioClient';
+import e from 'express';
 const routes = express.Router();
 
 const bodySizeLimit = getConfig().bodySizeLimit;
@@ -31,6 +32,20 @@ const saveCsvToTmp = (fileBuffer: Buffer, fileName: string): string => {
   return fileUrl;
 };
 
+const isValidFileType = (file: Express.Multer.File): boolean => {
+  const validMimeTypes = ['text/csv', 'application/json'];
+  return validMimeTypes.includes(file.mimetype);
+};
+
+function validateJsonFile(buffer: Buffer): boolean {
+  try {
+    JSON.parse(buffer.toString());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 routes.post('/upload', upload.single('file'), async (req, res) => {
   const file = req.file;
   const bucket = req.query.bucket;
@@ -45,20 +60,44 @@ routes.post('/upload', upload.single('file'), async (req, res) => {
     return res.status(400).send('No bucket provided');
   }
 
-  const headers = getCsvHeaders(file.buffer);
-
-  if (!headers) {
-    return res.status(400).send('Invalid file type, please upload a valid CSV file');
+  if (!isValidFileType(file)) {
+    logger.error(`Invalid file type: ${file.mimetype}`);
+    return res.status(400).send('Invalid file type. Please upload either a CSV or JSON file');
   }
-  const fileUrl = saveCsvToTmp(file.buffer, file.originalname);
 
-  const uploadResult = await uploadToMinio(fileUrl,file.originalname, bucket as string);
-  // const tableCreated = await createTable(headers, bucket as string);
-  logger.info(`file created: ${file.originalname}`);
+  // For CSV files, validate headers
+  if (file.mimetype === 'text/csv') {
+    const headers = getCsvHeaders(file.buffer);
+    if (!headers) {
+      return res.status(400).send('Invalid CSV file format');
+    }
+    try {
+      const fileUrl = saveCsvToTmp(file.buffer, file.originalname);
+      const uploadResult = await uploadToMinio(fileUrl, file.originalname, bucket as string, file.mimetype);
+      // Clean up the temporary file
+      fs.unlinkSync(fileUrl);
 
-  fs.unlinkSync(fileUrl);
+      if (uploadResult) {
+        return res.status(201).send(`File ${file.originalname} uploaded in bucket ${bucket}`);
+      } else {
+        return res.status(400).send(`Object ${file.originalname} already exists in bucket ${bucket}`);
+      }
+    } catch (error) {
+      // Clean up the temporary file in case of error
+      fs.unlinkSync(fileUrl);
+      logger.error('Error uploading file to Minio:', error);
+      return res.status(500).send('Error uploading file');
+    }
+  } else if (file.mimetype === 'application/json') {
+    if (!validateJsonFile(file.buffer)) {
+      return res.status(400).send('Invalid JSON file format');
+    }
 
-  return res.status(201).send('File uploaded successfully');
+    return res.status(200).send('JSON file is valid - Future implementation');
+  } else {
+    return res.status(400).send('Invalid file type. Please upload either a CSV or JSON file');
+  }
+  
 });
 
 export default routes;
