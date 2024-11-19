@@ -12,7 +12,7 @@ const {endPoint, port, useSSL, bucketRegion, accessKey, secretKey, prefix, suffi
  * @param {Object} [customMetadata={}] - Optional custom metadata
  * @returns {Promise<void>}
  */
-export async function uploadToMinio(sourceFile: string, destinationObject: string, bucket: string, customMetadata = {}) {
+export async function uploadToMinio(sourceFile: string, destinationObject: string, bucket: string, fileType: string, customMetadata = {}) {
     const minioClient = new Minio.Client({
         endPoint,
         port,
@@ -29,12 +29,12 @@ export async function uploadToMinio(sourceFile: string, destinationObject: strin
 
 
     try {
-        const fileExists = await checkCsvFileExists(destinationObject, bucket);
+        const fileExists = await checkFileExists(destinationObject, bucket, fileType);
         if (fileExists) {
            return false;
         } else {
             const metaData = {
-                'Content-Type': 'text/plain',
+                'Content-Type': fileType,
                 'X-Upload-Id': crypto.randomUUID(), 
                 ...customMetadata
             };
@@ -55,7 +55,7 @@ export async function uploadToMinio(sourceFile: string, destinationObject: strin
  * @param {string} bucket - Bucket name
  * @returns {Promise<boolean>} - Returns true if file exists, false otherwise
  */
-export async function checkCsvFileExists(fileName: string, bucket: string): Promise<boolean> {
+export async function checkFileExists(fileName: string, bucket: string, fileType: string): Promise<boolean> {
     const minioClient = new Minio.Client({
         endPoint,
         port,
@@ -74,7 +74,7 @@ export async function checkCsvFileExists(fileName: string, bucket: string): Prom
 
         // Get object stats to check if file exists
         const stats = await minioClient.statObject(bucket, fileName);     // Optionally verify it's a CSV file by checking Content-Type
-        if (stats.metaData && stats.metaData['content-type']) {
+        if (stats.metaData && stats.metaData['content-type'] === fileType) {
             logger.info(`File ${fileName} exists in bucket ${bucket}`);
             return true;
         } else {
