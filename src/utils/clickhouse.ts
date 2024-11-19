@@ -42,13 +42,7 @@ export async function createTable(fields: string[], tableName: string) {
 }
 
 export function generateDDL(fields: string[], tableName: string) {
-  return `CREATE TABLE IF NOT EXISTS ${tableName} (
-    table_id UUID DEFAULT generateUUIDv4(),
-    ${fields.map((field) => `${field} VARCHAR`).join(', ')}
-  )
-  ENGINE = MergeTree
-  ORDER BY (table_id)
-  `;
+  return `CREATE TABLE ${tableName} (table_id UUID DEFAULT generateUUIDv4(),${fields.map((field) => `${field} VARCHAR`).join(', ')}) ENGINE = MergeTree ORDER BY (table_id)`;
 }
 
 export function flattenJson(json: any, prefix = ''): string[] {
