@@ -1,5 +1,6 @@
 import * as Minio from "minio";
 import { getConfig } from '../config/config';
+import logger from '../logger';
 
 const {endPoint, port, useSSL, bucketRegion, accessKey, secretKey, prefix, suffix } =
     getConfig().minio;
@@ -24,7 +25,7 @@ export async function uploadToMinio(sourceFile: string, destinationObject: strin
     const exists = await minioClient.bucketExists(bucket);
     if (!exists) {
         await minioClient.makeBucket(bucket, bucketRegion);
-        console.log(`Bucket ${bucket} created in "${bucketRegion}".`);
+        logger.debug(`Bucket ${bucket} created in "${bucketRegion}".`);
     }
 
     // Set the object metadata
@@ -35,5 +36,5 @@ export async function uploadToMinio(sourceFile: string, destinationObject: strin
 
     // Upload the file
     await minioClient.fPutObject(bucket, destinationObject, sourceFile, metaData);
-    console.log(`File ${sourceFile} uploaded as object ${destinationObject} in bucket ${bucket}`);
+    logger.debug(`File ${sourceFile} uploaded as object ${destinationObject} in bucket ${bucket}`);
 }

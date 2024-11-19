@@ -110,30 +110,3 @@ export async function insertFromS3(tableName: string, s3Path: string, s3Config: 
   }
 }
 
-export async function insertFromFile(tableName: string, filePath: string) {
-  const client = createClient({
-    url,
-    password,
-  });
-  logger.info(`filePath: ${filePath}`);
-  logger.info(`tableName: ${tableName}`);
-  const normalizedTableName = tableName.replace(/-/g, '_');
-
-  try {
-    logger.debug(`Inserting data into ${normalizedTableName} from ${filePath}`);
-    const query = `
-      INSERT INTO \`default\`.${normalizedTableName} 
-      SELECT * FROM file('${filePath}', 'CSVWithNames')
-    `;
-
-    await client.query({ query });
-    logger.info(`Successfully inserted data into ${normalizedTableName}`);
-    return true;
-  } catch (error) {
-    logger.error('Error inserting data from file');
-    logger.error(error);
-    return false;
-  } finally {
-    await client.close();
-  }
-}
