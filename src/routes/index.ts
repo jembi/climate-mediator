@@ -51,14 +51,24 @@ routes.post('/upload', upload.single('file'), async (req, res) => {
     return res.status(400).send('Invalid file type, please upload a valid CSV file');
   }
   const fileUrl = saveCsvToTmp(file.buffer, file.originalname);
-
-  const uploadResult = await uploadToMinio(fileUrl,file.originalname, bucket as string);
-  // const tableCreated = await createTable(headers, bucket as string);
   logger.info(`file created: ${file.originalname}`);
 
-  fs.unlinkSync(fileUrl);
+  try {
+    const uploadResult = await uploadToMinio(fileUrl, file.originalname, bucket as string);
+    // Clean up the temporary file
+    fs.unlinkSync(fileUrl);
 
-  return res.status(201).send('File uploaded successfully');
+    if (uploadResult) {
+      return res.status(201).send(`File ${file.originalname} uploaded in bucket ${bucket}`);
+    } else {
+      return res.status(400).send(`Object ${file.originalname} already exists in bucket ${bucket}`);
+    }
+  } catch (error) {
+    // Clean up the temporary file in case of error
+    fs.unlinkSync(fileUrl);
+    logger.error('Error uploading file to Minio:', error);
+    return res.status(500).send('Error uploading file');
+  }
 });
 
 export default routes;
