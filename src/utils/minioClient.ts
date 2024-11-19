@@ -35,6 +35,7 @@ export async function uploadToMinio(sourceFile: string, destinationObject: strin
         } else {
             const metaData = {
                 'Content-Type': 'text/plain',
+                'X-Upload-Id': crypto.randomUUID(), 
                 ...customMetadata
             };
         
