@@ -27,7 +27,7 @@ export const getConfig = () => {
       endPoint: process.env.MINIO_ENDPOINT || 'localhost',
       port: process.env.MINIO_PORT ? parseInt(process.env.MINIO_PORT) : 9000,
       useSSL: process.env.MINIO_USE_SSL === 'true' ? true : false,
-      bucket: process.env.MINIO_BUCKET || 'climate-mediator',
+      buckets: process.env.MINIO_BUCKETS || 'climate-mediator',
       accessKey: process.env.MINIO_ACCESS_KEY || 'tCroZpZ3usDUcvPM3QT6',
       secretKey: process.env.MINIO_SECRET_KEY || 'suVjMHUpVIGyWx8fFJHTiZiT88dHhKgVpzvYTOKK',
       prefix: process.env.MINIO_PREFIX || '',
