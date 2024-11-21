@@ -5,6 +5,7 @@ import logger from '../logger';
 const { clickhouse } = getConfig();
 const { url, password } = clickhouse;
 
+
 export async function createTable(fields: string[], tableName: string) {
   const client = createClient({
     url,

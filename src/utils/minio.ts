@@ -5,7 +5,7 @@ import { readFile, rm } from 'fs/promises';
 import { createTable } from './clickhouse';
 import { validateJsonFile, getCsvHeaders } from './file-validators';
 
-export async function setupMinio() {
+export async function createMinioBucketListeners() {
   const { buckets, endPoint, port, useSSL, accessKey, secretKey, prefix, suffix } =
     getConfig().minio;
 
@@ -32,6 +32,8 @@ export async function setupMinio() {
     const listener = minioClient.listenBucketNotification(bucket, prefix, suffix, [
       's3:ObjectCreated:*',
     ]);
+
+    logger.debug(`Listening for notifications on bucket ${bucket}`);
 
     listener.on('notification', async (notification) => {
       //@ts-ignore
