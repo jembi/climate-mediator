@@ -73,7 +73,6 @@ routes.post('/upload', upload.single('file'), async (req, res) => {
     }
     const fileUrl = saveCsvToTmp(file.buffer, file.originalname);
     try {
-      const fileUrl = saveCsvToTmp(file.buffer, file.originalname);
       const uploadResult = await uploadToMinio(fileUrl, file.originalname, bucket as string, file.mimetype);
       // Clean up the temporary file
       fs.unlinkSync(fileUrl);
