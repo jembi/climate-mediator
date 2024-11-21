@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import { getCsvHeaders } from '../../src/utils/file-validators';
-import { flattenJson, generateDDL } from '../../src/utils/clickhouse';
+import { createTable, flattenJson, generateDDL } from '../../src/utils/clickhouse';
 
 
 describe('Create Tables based on files', function () {
@@ -22,11 +22,19 @@ describe('Create Tables based on files', function () {
     expect(fields).to.deep.equal(['id', 'name', 'age']);
   });
 
-  it('should create a table based on a csv file', async () => {
+  it('should generate a table create ddl based on a csv file', async () => {
     const csvFile = Buffer.from('id,name,age\n1,John,20\n2,Jane,21');
     const fields = getCsvHeaders(csvFile);
     if (!fields) throw new Error('No fields found');
     const result = generateDDL(fields, 'test');
     expect(result).to.equal('CREATE TABLE test (table_id UUID DEFAULT generateUUIDv4(),id VARCHAR, name VARCHAR, age VARCHAR) ENGINE = MergeTree ORDER BY (table_id)');
+  });
+
+  it('should create a table based on a csv file', async () => {
+    const csvFile = Buffer.from('id,name,age\n1,John,20\n2,Jane,21');
+    const fields = getCsvHeaders(csvFile);
+    if (!fields) throw new Error('No fields found');
+    const result = await createTable(fields, 'test');
+    expect(result).to.be.true;
   });
 });
