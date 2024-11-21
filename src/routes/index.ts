@@ -71,6 +71,7 @@ routes.post('/upload', upload.single('file'), async (req, res) => {
     if (!headers) {
       return res.status(400).send('Invalid CSV file format');
     }
+    const fileUrl = saveCsvToTmp(file.buffer, file.originalname);
     try {
       const fileUrl = saveCsvToTmp(file.buffer, file.originalname);
       const uploadResult = await uploadToMinio(fileUrl, file.originalname, bucket as string, file.mimetype);
