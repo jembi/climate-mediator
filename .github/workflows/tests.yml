@@ -11,15 +11,15 @@ jobs:
 
       # Set up Docker Compose
       - name: Set up Docker Compose
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       # Start Docker Compose services
       - name: Start services with Docker Compose
-        run: docker-compose up -d
+        run: docker compose up -d
       
       - name: Run tests
         run: npm run test
       
       - name: Tear down services
         if: always()
-        run: docker-compose down
+        run: docker compose down
