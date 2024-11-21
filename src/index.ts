@@ -23,3 +23,4 @@ app.listen(getConfig().port, () => {
     setupMediator(path.resolve(__dirname, './openhim/mediatorConfig.json'));
   }
 });
+
