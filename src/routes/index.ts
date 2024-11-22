@@ -3,131 +3,128 @@ import multer from 'multer';
 import { getConfig } from '../config/config';
 import { getCsvHeaders } from '../utils/file-validators';
 import logger from '../logger';
-import fs from 'fs';
+import fs from 'fs/promises';
 import path from 'path';
 import { uploadToMinio } from '../utils/minioClient';
-import e from 'express';
-const routes = express.Router();
 
+// Constants
+const VALID_MIME_TYPES = ['text/csv', 'application/json'] as const;
+type ValidMimeType = typeof VALID_MIME_TYPES[number];
+
+interface UploadResponse {
+  status: 'success' | 'error';
+  code: string;
+  message: string;
+}
+
+const routes = express.Router();
 const bodySizeLimit = getConfig().bodySizeLimit;
-const jsonBodyParser = express.json({
-  type: 'application/json',
-  limit: bodySizeLimit,
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  fileFilter: (_, file, cb) => {
+    cb(null, VALID_MIME_TYPES.includes(file.mimetype as ValidMimeType));
+  }
 });
 
-const upload = multer({ storage: multer.memoryStorage() });
+// Helper functions
+const createErrorResponse = (code: string, message: string): UploadResponse => ({
+  status: 'error',
+  code,
+  message
+});
 
-const saveCsvToTmp = (fileBuffer: Buffer, fileName: string): string => {
+const createSuccessResponse = (code: string, message: string): UploadResponse => ({
+  status: 'success',
+  code,
+  message
+});
+
+const saveCsvToTmp = async (fileBuffer: Buffer, fileName: string): Promise<string> => {
   const tmpDir = path.join(process.cwd(), 'tmp');
-  
-  // Create tmp directory if it doesn't exist
-  if (!fs.existsSync(tmpDir)) {
-    fs.mkdirSync(tmpDir);
-  }
+  await fs.mkdir(tmpDir, { recursive: true });
   
   const fileUrl = path.join(tmpDir, fileName);
-  fs.writeFileSync(fileUrl, fileBuffer);
-  logger.info(`fileUrl: ${fileUrl}`);
+  await fs.writeFile(fileUrl, fileBuffer);
+  logger.info(`File saved: ${fileUrl}`);
   
   return fileUrl;
 };
 
-const isValidFileType = (file: Express.Multer.File): boolean => {
-  const validMimeTypes = ['text/csv', 'application/json'];
-  return validMimeTypes.includes(file.mimetype);
-};
-
-function validateJsonFile(buffer: Buffer): boolean {
+const validateJsonFile = (buffer: Buffer): boolean => {
   try {
     JSON.parse(buffer.toString());
     return true;
   } catch {
     return false;
   }
-}
+};
 
+// File handlers
+const handleCsvFile = async (
+  file: Express.Multer.File, 
+  bucket: string
+): Promise<UploadResponse> => {
+  const headers = getCsvHeaders(file.buffer);
+  if (!headers) {
+    return createErrorResponse('INVALID_CSV_FORMAT', 'Invalid CSV file format');
+  }
+
+  const fileUrl = await saveCsvToTmp(file.buffer, file.originalname);
+  try {
+    const uploadResult = await uploadToMinio(fileUrl, file.originalname, bucket, file.mimetype);
+    await fs.unlink(fileUrl);
+
+    return uploadResult.success
+      ? createSuccessResponse('UPLOAD_SUCCESS', uploadResult.message)
+      : createErrorResponse('UPLOAD_FAILED', uploadResult.message);
+  } catch (error) {
+    logger.error('Error uploading file to Minio:', error);
+    throw error;
+  }
+};
+
+const handleJsonFile = (file: Express.Multer.File): UploadResponse => {
+  if (!validateJsonFile(file.buffer)) {
+    return createErrorResponse('INVALID_JSON_FORMAT', 'Invalid JSON file format');
+  }
+  return createSuccessResponse('JSON_VALID', 'JSON file is valid - Future implementation');
+};
+
+// Main route handler
 routes.post('/upload', upload.single('file'), async (req, res) => {
-  const file = req.file;
-  const bucket = req.query.bucket;
+  try {
+    const file = req.file;
+    const bucket = req.query.bucket as string;
 
-  if (!file) {
-    logger.error('No file uploaded');
-    return res.status(400).json({
-      status: 'error',
-      code: 'FILE_MISSING',
-      message: 'No file uploaded'
-    });
-  }
-
-  if (!bucket) {
-    logger.error('No bucket provided');
-    return res.status(400).json({
-      status: 'error',
-      code: 'BUCKET_MISSING',
-      message: 'No bucket provided'
-    });
-  }
-
-  if (!isValidFileType(file)) {
-    logger.error(`Invalid file type: ${file.mimetype}`);
-    return res.status(400).json({
-      status: 'error',
-      code: 'INVALID_FILE_TYPE',
-      message: 'Invalid file type. Please upload either a CSV or JSON file'
-    });
-  }
-
-  // For CSV files, validate headers
-  if (file.mimetype === 'text/csv') {
-    const headers = getCsvHeaders(file.buffer);
-    if (!headers) {
-      return res.status(400).json({
-        status: 'error',
-        code: 'INVALID_CSV_FORMAT',
-        message: 'Invalid CSV file format'
-      });
-    }
-    const fileUrl = saveCsvToTmp(file.buffer, file.originalname);
-    try {
-      const uploadResult = await uploadToMinio(fileUrl, file.originalname, bucket as string, file.mimetype);
-      // Clean up the temporary file
-      fs.unlinkSync(fileUrl);
-
-      if (uploadResult.success) {
-        return res.status(201).json({
-          status: 'success',
-          code: 'UPLOAD_SUCCESS',
-          message: uploadResult.message
-        });
-      } else {
-        return res.status(400).json({
-          status: 'error',
-          code: 'UPLOAD_FAILED',
-          message: uploadResult.message
-        });
-      }
-    } catch (error: unknown) {
-      logger.error('Error uploading file to Minio:', error);
-      return res.status(500).json({
-        status: 'error',
-        code: 'INTERNAL_SERVER_ERROR',
-        message: error instanceof Error ? error.message : 'Unknown error'
-      });
-    }
-  } else if (file.mimetype === 'application/json') {
-    if (!validateJsonFile(file.buffer)) {
-      return res.status(400).json({
-        status: 'error',
-        code: 'INVALID_JSON_FORMAT',
-        message: 'Invalid JSON file format'
-      });
+    if (!file) {
+      logger.error('No file uploaded');
+      return res.status(400).json(
+        createErrorResponse('FILE_MISSING', 'No file uploaded')
+      );
     }
 
-    return res.status(200).json({
-      status: 'success',
-      code: 'JSON_VALID',
-      message: 'JSON file is valid - Future implementation'
-    });
+    if (!bucket) {
+      logger.error('No bucket provided');
+      return res.status(400).json(
+        createErrorResponse('BUCKET_MISSING', 'No bucket provided')
+      );
+    }
+
+    const response = file.mimetype === 'text/csv'
+      ? await handleCsvFile(file, bucket)
+      : handleJsonFile(file);
+
+    const statusCode = response.status === 'success' ? 201 : 400;
+    return res.status(statusCode).json(response);
+
+  } catch (error) {
+    logger.error('Error processing upload:', error);
+    return res.status(500).json(
+      createErrorResponse(
+        'INTERNAL_SERVER_ERROR',
+        error instanceof Error ? error.message : 'Unknown error'
+      )
+    );
   }
 });
 
