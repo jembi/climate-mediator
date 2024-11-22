@@ -1,6 +1,7 @@
 import * as Minio from "minio";
 import { getConfig } from '../config/config';
 import logger from '../logger';
+import crypto from 'crypto';
 
 const {endPoint, port, useSSL, bucketRegion, accessKey, secretKey} = getConfig().minio;
 
