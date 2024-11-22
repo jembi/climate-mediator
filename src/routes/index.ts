@@ -52,24 +52,40 @@ routes.post('/upload', upload.single('file'), async (req, res) => {
 
   if (!file) {
     logger.error('No file uploaded');
-    return res.status(400).send('No file uploaded');
+    return res.status(400).json({
+      status: 'error',
+      code: 'FILE_MISSING',
+      message: 'No file uploaded'
+    });
   }
 
   if (!bucket) {
     logger.error('No bucket provided');
-    return res.status(400).send('No bucket provided');
+    return res.status(400).json({
+      status: 'error',
+      code: 'BUCKET_MISSING',
+      message: 'No bucket provided'
+    });
   }
 
   if (!isValidFileType(file)) {
     logger.error(`Invalid file type: ${file.mimetype}`);
-    return res.status(400).send('Invalid file type. Please upload either a CSV or JSON file');
+    return res.status(400).json({
+      status: 'error',
+      code: 'INVALID_FILE_TYPE',
+      message: 'Invalid file type. Please upload either a CSV or JSON file'
+    });
   }
 
   // For CSV files, validate headers
   if (file.mimetype === 'text/csv') {
     const headers = getCsvHeaders(file.buffer);
     if (!headers) {
-      return res.status(400).send('Invalid CSV file format');
+      return res.status(400).json({
+        status: 'error',
+        code: 'INVALID_CSV_FORMAT',
+        message: 'Invalid CSV file format'
+      });
     }
     const fileUrl = saveCsvToTmp(file.buffer, file.originalname);
     try {
@@ -77,27 +93,42 @@ routes.post('/upload', upload.single('file'), async (req, res) => {
       // Clean up the temporary file
       fs.unlinkSync(fileUrl);
 
-      if (uploadResult) {
-        return res.status(201).send(`File ${file.originalname} uploaded in bucket ${bucket}`);
+      if (uploadResult.success) {
+        return res.status(201).json({
+          status: 'success',
+          code: 'UPLOAD_SUCCESS',
+          message: uploadResult.message
+        });
       } else {
-        return res.status(400).send(`Object ${file.originalname} already exists in bucket ${bucket}`);
+        return res.status(400).json({
+          status: 'error',
+          code: 'UPLOAD_FAILED',
+          message: uploadResult.message
+        });
       }
-    } catch (error) {
-      // Clean up the temporary file in case of error
-      fs.unlinkSync(fileUrl);
+    } catch (error: unknown) {
       logger.error('Error uploading file to Minio:', error);
-      return res.status(500).send('Error uploading file');
+      return res.status(500).json({
+        status: 'error',
+        code: 'INTERNAL_SERVER_ERROR',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   } else if (file.mimetype === 'application/json') {
     if (!validateJsonFile(file.buffer)) {
-      return res.status(400).send('Invalid JSON file format');
+      return res.status(400).json({
+        status: 'error',
+        code: 'INVALID_JSON_FORMAT',
+        message: 'Invalid JSON file format'
+      });
     }
 
-    return res.status(200).send('JSON file is valid - Future implementation');
-  } else {
-    return res.status(400).send('Invalid file type. Please upload either a CSV or JSON file');
+    return res.status(200).json({
+      status: 'success',
+      code: 'JSON_VALID',
+      message: 'JSON file is valid - Future implementation'
+    });
   }
-  
 });
 
 export default routes;

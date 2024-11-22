@@ -27,11 +27,10 @@ export async function uploadToMinio(sourceFile: string, destinationObject: strin
         logger.info(`Bucket ${bucket} created in "${bucketRegion}".`);
     }
 
-
     try {
-        const fileExists = await checkFileExists(destinationObject, bucket, fileType);
-        if (fileExists) {
-           return false;
+        const fileCheck = await checkFileExists(destinationObject, bucket, fileType);
+        if (fileCheck.exists) {
+            return { success: false, message: fileCheck.message };
         } else {
             const metaData = {
                 'Content-Type': fileType,
@@ -42,10 +41,11 @@ export async function uploadToMinio(sourceFile: string, destinationObject: strin
             // Upload the file
             await minioClient.fPutObject(bucket, destinationObject, sourceFile, metaData);
             logger.info(`File ${sourceFile} uploaded as object ${destinationObject} in bucket ${bucket}`);
-            return true;
+            return {success: true, message: `File ${sourceFile} uploaded as object ${destinationObject} in bucket ${bucket}`};
         }
     } catch (error) {
         console.error('Error checking file:', error);
+        return {success: false, message: `Error uploading file: ${error}`};
     }   
 }
 
@@ -55,7 +55,7 @@ export async function uploadToMinio(sourceFile: string, destinationObject: strin
  * @param {string} bucket - Bucket name
  * @returns {Promise<boolean>} - Returns true if file exists, false otherwise
  */
-export async function checkFileExists(fileName: string, bucket: string, fileType: string): Promise<boolean> {
+export async function checkFileExists(fileName: string, bucket: string, fileType: string): Promise<{ exists: boolean, message: string }> {
     const minioClient = new Minio.Client({
         endPoint,
         port,
@@ -68,27 +68,36 @@ export async function checkFileExists(fileName: string, bucket: string, fileType
         // Check if bucket exists first
         const bucketExists = await minioClient.bucketExists(bucket);
         if (!bucketExists) {
-            logger.info(`Bucket ${bucket} does not exist`);
-            return false;
+            return {
+                exists: false,
+                message: `Bucket ${bucket} does not exist`
+            };
         }
 
         // Get object stats to check if file exists
-        const stats = await minioClient.statObject(bucket, fileName);     // Optionally verify it's a CSV file by checking Content-Type
+        const stats = await minioClient.statObject(bucket, fileName);
         if (stats.metaData && stats.metaData['content-type'] === fileType) {
-            logger.info(`File ${fileName} exists in bucket ${bucket}`);
-            return true;
+            return {
+                exists: true,
+                message: `File ${fileName} exists in bucket ${bucket}`
+            };
         } else {
-            logger.info(`File ${fileName} does not exist in bucket ${bucket}`);
-            return false;
+            return {
+                exists: false,
+                message: `File ${fileName} does not exist in bucket ${bucket}`
+            };
         }
     } catch (err: any) {
         if (err.code === 'NotFound') {
-            logger.debug(`File ${fileName} not found in bucket ${bucket}`);
-            return false;
+            return {
+                exists: false,
+                message: `File ${fileName} not found in bucket ${bucket}`
+            };
         }
-        // For any other error, log it and rethrow
-        logger.error(`Error checking file existence: ${err.message}`);
-        throw err;
+        // For any other error, return error message
+        return {
+            exists: false,
+            message: `Error checking file existence: ${err.message}`
+        };
     }
-
 }
