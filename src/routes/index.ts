@@ -6,7 +6,7 @@ import logger from '../logger';
 import fs from 'fs/promises';
 import path from 'path';
 import e from 'express';
-import { uploadToMinio } from '../utils/minio';
+import { uploadToMinio } from '../utils/minioClient';
 
 // Constants
 const VALID_MIME_TYPES = ['text/csv', 'application/json'] as const;

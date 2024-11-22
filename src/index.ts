@@ -6,13 +6,11 @@ import routes from './routes/index';
 import { setupMediator } from './openhim/openhim';
 import {
   createMinioBucketListeners,
-} from './utils/minio';
+} from './utils/minioClient';
 
 const app = express();
 
-const prefix = getConfig().runningMode === 'testing' ? '/' : '/climate';
-
-app.use(prefix, routes);
+app.use('/', routes);
 
 createMinioBucketListeners();
 

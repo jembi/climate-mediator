@@ -23,7 +23,6 @@ export const getConfig = () => {
     trustSelfSigned: process.env.TRUST_SELF_SIGNED === 'false' ? false : true,
     runningMode: process.env.MODE || '',
     bodySizeLimit: process.env.BODY_SIZE_LIMIT || '50mb',
-    createSampleTable: process.env.CREATE_SAMPLE_TABLE === 'true' ? true : false,
     minio: {
       endPoint: process.env.MINIO_ENDPOINT || 'localhost',
       port: process.env.MINIO_PORT ? parseInt(process.env.MINIO_PORT) : 9000,

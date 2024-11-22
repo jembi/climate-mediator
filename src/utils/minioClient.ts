@@ -1,26 +1,30 @@
-import * as Minio from "minio";
+import * as Minio from 'minio';
 import { getConfig } from '../config/config';
 import logger from '../logger';
 import crypto from 'crypto';
+import { readFile, rm } from 'fs/promises';
+import { createTable, insertFromS3 } from './clickhouse';
+import { validateJsonFile, getCsvHeaders } from './file-validators';
 
-const {endPoint, port, useSSL, bucketRegion, accessKey, secretKey} = getConfig().minio;
+const { endPoint, port, useSSL, bucketRegion, accessKey, secretKey, buckets, prefix, suffix } =
+  getConfig().minio;
 
 // Create a shared Minio client instance
 const minioClient = new Minio.Client({
-    endPoint,
-    port,
-    useSSL,
-    accessKey,
-    secretKey
+  endPoint,
+  port,
+  useSSL,
+  accessKey,
+  secretKey,
 });
 
 interface MinioResponse {
-    success: boolean;
-    message: string;
+  success: boolean;
+  message: string;
 }
 
 interface FileExistsResponse extends MinioResponse {
-    exists: boolean;
+  exists: boolean;
 }
 
 /**
@@ -29,11 +33,11 @@ interface FileExistsResponse extends MinioResponse {
  * @returns {Promise<void>}
  */
 async function ensureBucketExists(bucket: string): Promise<void> {
-    const exists = await minioClient.bucketExists(bucket);
-    if (!exists) {
-        await minioClient.makeBucket(bucket, bucketRegion);
-        logger.info(`Bucket ${bucket} created in "${bucketRegion}"`);
-    }
+  const exists = await minioClient.bucketExists(bucket);
+  if (!exists) {
+    await minioClient.makeBucket(bucket, bucketRegion);
+    logger.info(`Bucket ${bucket} created in "${bucketRegion}"`);
+  }
 }
 
 /**
@@ -44,47 +48,47 @@ async function ensureBucketExists(bucket: string): Promise<void> {
  * @returns {Promise<FileExistsResponse>}
  */
 export async function checkFileExists(
-    fileName: string, 
-    bucket: string, 
-    fileType: string
+  fileName: string,
+  bucket: string,
+  fileType: string
 ): Promise<FileExistsResponse> {
-    try {
-        const bucketExists = await minioClient.bucketExists(bucket);
-        if (!bucketExists) {
-            return {
-                exists: false,
-                success: false,
-                message: `Bucket ${bucket} does not exist`
-            };
-        }
-
-        const stats = await minioClient.statObject(bucket, fileName);
-        const exists = stats.metaData?.['content-type'] === fileType;
-        
-        return {
-            exists,
-            success: true,
-            message: exists 
-                ? `File ${fileName} exists in bucket ${bucket}`
-                : `File ${fileName} does not exist in bucket ${bucket}`
-        };
-    } catch (err) {
-        const error = err as Error;
-        if ((error as any).code === 'NotFound') {
-            return {
-                exists: false,
-                success: true,
-                message: `File ${fileName} not found in bucket ${bucket}`
-            };
-        }
-        
-        logger.error('Error checking file existence:', error);
-        return {
-            exists: false,
-            success: false,
-            message: `Error checking file existence: ${error.message}`
-        };
+  try {
+    const bucketExists = await minioClient.bucketExists(bucket);
+    if (!bucketExists) {
+      return {
+        exists: false,
+        success: false,
+        message: `Bucket ${bucket} does not exist`,
+      };
     }
+
+    const stats = await minioClient.statObject(bucket, fileName);
+    const exists = stats.metaData?.['content-type'] === fileType;
+
+    return {
+      exists,
+      success: true,
+      message: exists
+        ? `File ${fileName} exists in bucket ${bucket}`
+        : `File ${fileName} does not exist in bucket ${bucket}`,
+    };
+  } catch (err) {
+    const error = err as Error;
+    if ((error as any).code === 'NotFound') {
+      return {
+        exists: false,
+        success: true,
+        message: `File ${fileName} not found in bucket ${bucket}`,
+      };
+    }
+
+    logger.error('Error checking file existence:', error);
+    return {
+      exists: false,
+      success: false,
+      message: `Error checking file existence: ${error.message}`,
+    };
+  }
 }
 
 /**
@@ -97,43 +101,129 @@ export async function checkFileExists(
  * @returns {Promise<MinioResponse>}
  */
 export async function uploadToMinio(
-    sourceFile: string,
-    destinationObject: string,
-    bucket: string,
-    fileType: string,
-    customMetadata = {}
+  sourceFile: string,
+  destinationObject: string,
+  bucket: string,
+  fileType: string,
+  customMetadata = {}
 ): Promise<MinioResponse> {
-    try {
-        await ensureBucketExists(bucket);
+  try {
+    logger.info(`Uploading file ${sourceFile} to bucket ${bucket}`);
+    await ensureBucketExists(bucket);
 
-        const fileCheck = await checkFileExists(destinationObject, bucket, fileType);
-        if (fileCheck.exists) {
-            return { 
-                success: false, 
-                message: fileCheck.message 
-            };
-        }
+    const fileCheck = await checkFileExists(destinationObject, bucket, fileType);
+    if (fileCheck.exists) {
+      return {
+        success: false,
+        message: fileCheck.message,
+      };
+    }
 
-        const metaData = {
-            'Content-Type': fileType,
-            'X-Upload-Id': crypto.randomUUID(),
-            ...customMetadata
-        };
-    
-        await minioClient.fPutObject(bucket, destinationObject, sourceFile, metaData);
-        const successMessage = `File ${sourceFile} uploaded as object ${destinationObject} in bucket ${bucket}`;
-        logger.info(successMessage);
-        
-        return {
-            success: true, 
-            message: successMessage
-        };
-    } catch (error) {
-        const errorMessage = `Error uploading file: ${error instanceof Error ? error.message : String(error)}`;
-        logger.error(errorMessage);
-        return {
-            success: false,
-            message: errorMessage
-        };
-    }   
+    const metaData = {
+      'Content-Type': fileType,
+      'X-Upload-Id': crypto.randomUUID(),
+      ...customMetadata,
+    };
+
+    await minioClient.fPutObject(bucket, destinationObject, sourceFile, metaData);
+    const successMessage = `File ${sourceFile} uploaded as object ${destinationObject} in bucket ${bucket}`;
+    logger.info(successMessage);
+
+    return {
+      success: true,
+      message: successMessage,
+    };
+  } catch (error) {
+    const errorMessage = `Error uploading file: ${error instanceof Error ? error.message : String(error)}`;
+    logger.error(errorMessage);
+    return {
+      success: false,
+      message: errorMessage,
+    };
+  }
+}
+
+export async function createMinioBucketListeners() {
+  const minioClient = new Minio.Client({
+    endPoint,
+    port,
+    useSSL,
+    accessKey,
+    secretKey,
+  });
+
+  try {
+    // Test connection by attempting to list buckets
+    await minioClient.listBuckets();
+    logger.info(`Successfully connected to Minio at ${endPoint}:${port}`);
+  } catch (error) {
+    logger.error(`Failed to connect to Minio: ${error}`);
+    throw error;
+  }
+
+  const listOfBuckets = buckets.split(',');
+
+  listOfBuckets.length === 0 && logger.warn('No buckets specified in the configuration');
+
+  for (const bucket of listOfBuckets) {
+    const listener = minioClient.listenBucketNotification(bucket, prefix, suffix, [
+      's3:ObjectCreated:*',
+    ]);
+
+    logger.info(`Listening for notifications on bucket ${bucket}`);
+
+    listener.on('notification', async (notification) => {
+      //@ts-ignore
+      const file = notification.s3.object.key;
+
+      //@ts-ignore
+      const tableName = notification.s3.bucket.name;
+
+      logger.info(`File received: ${file} from bucket ${tableName}`);
+
+      try {
+        //@ts-ignore
+        minioClient.fGetObject(bucket, file, `tmp/${file}`, async (err) => {
+          if (err) {
+            logger.error(err);
+          } else {
+            const fileBuffer = await readFile(`tmp/${file}`);
+
+            //get the file extension
+            const extension = file.split('.').pop();
+            logger.info(`File Downloaded - Type: ${extension}`);
+
+            if (extension === 'json' && validateJsonFile(fileBuffer)) {
+              // flatten the json and pass it to clickhouse
+              //const fields = flattenJson(JSON.parse(fileBuffer.toString()));
+              //await createTable(fields, tableName);
+              logger.warn(`File type not currently supported- ${extension}`);
+            } else if (extension === 'csv' && getCsvHeaders(fileBuffer)) {
+              //get the first line of the csv file
+              const fields = (await readFile(`tmp/${file}`, 'utf8')).split('\n')[0].split(',');
+
+              await createTable(fields, tableName);
+
+              // If running locally and using docker compose, the minio host is 'minio'. This is to allow clickhouse to connect to the minio server
+              const host = getConfig().runningMode === 'testing' ? 'minio' : endPoint;
+              // Construct the S3-style URL for the file
+              const minioUrl = `http://${host}:${port}/${bucket}/${file}`;
+
+              // Insert data into clickhouse
+              await insertFromS3(tableName, minioUrl, {
+                accessKey,
+                secretKey,
+              });
+            } else {
+              logger.warn(`Unknown file type - ${extension}`);
+            }
+            await rm(`tmp/${file}`);
+            logger.debug(`File ${file} deleted from tmp directory`);
+          }
+        });
+      } catch (error) {
+        logger.error(`Error processing file ${file}: ${error}`);
+      }
+    });
+  }
 }
