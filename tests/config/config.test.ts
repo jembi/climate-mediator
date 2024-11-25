@@ -1,7 +1,7 @@
 import { config, expect } from 'chai';
 import { Config } from '../../src/config/config';
 
-describe('Config', () => {
+describe('Config', function () {
   const OLD_ENV = process.env;
 
   beforeEach(() => {

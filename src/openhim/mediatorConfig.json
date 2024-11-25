@@ -13,8 +13,7 @@
           "host": "climate-mediator",
           "port": "3000",
           "primary": true,
-          "type": "http",
-          "path": "/climate/upload"
+          "type": "http"
         }
       ],
       "allow": [

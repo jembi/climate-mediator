@@ -5,6 +5,7 @@ import logger from '../logger';
 const { clickhouse } = getConfig();
 const { url, password } = clickhouse;
 
+
 export async function createTable(fields: string[], tableName: string) {
   const client = createClient({
     url,
@@ -26,14 +27,14 @@ export async function createTable(fields: string[], tableName: string) {
   }
 
   try {
-    console.debug(`Creating table ${normalizedTableName} with fields ${fields.join(', ')}`);
+    logger.debug(`Creating table ${normalizedTableName} with fields ${fields.join(', ')}`);
     const result = await client.query({
       query: generateDDL(fields, normalizedTableName),
     });
-    console.log('Table created successfully');
+    logger.info(`Table ${normalizedTableName} created successfully`);
   } catch (error) {
-    console.log('Error checking/creating table');
-    console.error(error);
+    logger.error(`Error checking/creating table ${normalizedTableName}`);
+    logger.debug(JSON.stringify(error));
     return false;
   }
 
@@ -42,13 +43,7 @@ export async function createTable(fields: string[], tableName: string) {
 }
 
 export function generateDDL(fields: string[], tableName: string) {
-  return `CREATE TABLE IF NOT EXISTS ${tableName} (
-    table_id UUID DEFAULT generateUUIDv4(),
-    ${fields.map((field) => `${field} VARCHAR`).join(', ')}
-  )
-  ENGINE = MergeTree
-  ORDER BY (table_id)
-  `;
+  return `CREATE TABLE ${tableName} (table_id UUID DEFAULT generateUUIDv4(),${fields.map((field) => `${field} VARCHAR`).join(', ')}) ENGINE = MergeTree ORDER BY (table_id)`;
 }
 
 export function flattenJson(json: any, prefix = ''): string[] {
