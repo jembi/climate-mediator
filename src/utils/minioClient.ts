@@ -182,45 +182,40 @@ export async function createMinioBucketListeners() {
       logger.info(`File received: ${file} from bucket ${tableName}`);
 
       try {
-        //@ts-ignore
-        minioClient.fGetObject(bucket, file, `tmp/${file}`, async (err) => {
-          if (err) {
-            logger.error(err);
-          } else {
-            const fileBuffer = await readFile(`tmp/${file}`);
+        await minioClient.fGetObject(bucket, file, `tmp/${file}`);
 
-            //get the file extension
-            const extension = file.split('.').pop();
-            logger.info(`File Downloaded - Type: ${extension}`);
+        const fileBuffer = await readFile(`tmp/${file}`);
 
-            if (extension === 'json' && validateJsonFile(fileBuffer)) {
-              // flatten the json and pass it to clickhouse
-              //const fields = flattenJson(JSON.parse(fileBuffer.toString()));
-              //await createTable(fields, tableName);
-              logger.warn(`File type not currently supported- ${extension}`);
-            } else if (extension === 'csv' && getCsvHeaders(fileBuffer)) {
-              //get the first line of the csv file
-              const fields = (await readFile(`tmp/${file}`, 'utf8')).split('\n')[0].split(',');
+        //get the file extension
+        const extension = file.split('.').pop();
+        logger.info(`File Downloaded - Type: ${extension}`);
 
-              await createTable(fields, tableName);
+        if (extension === 'json' && validateJsonFile(fileBuffer)) {
+          // flatten the json and pass it to clickhouse
+          //const fields = flattenJson(JSON.parse(fileBuffer.toString()));
+          //await createTable(fields, tableName);
+          logger.warn(`File type not currently supported- ${extension}`);
+        } else if (extension === 'csv' && getCsvHeaders(fileBuffer)) {
+          //get the first line of the csv file
+          const fields = (await readFile(`tmp/${file}`, 'utf8')).split('\n')[0].split(',');
 
-              // If running locally and using docker compose, the minio host is 'minio'. This is to allow clickhouse to connect to the minio server
-              const host = getConfig().runningMode === 'testing' ? 'minio' : endPoint;
-              // Construct the S3-style URL for the file
-              const minioUrl = `http://${host}:${port}/${bucket}/${file}`;
+          await createTable(fields, tableName);
 
-              // Insert data into clickhouse
-              await insertFromS3(tableName, minioUrl, {
-                accessKey,
-                secretKey,
-              });
-            } else {
-              logger.warn(`Unknown file type - ${extension}`);
-            }
-            await rm(`tmp/${file}`);
-            logger.debug(`File ${file} deleted from tmp directory`);
-          }
-        });
+          // If running locally and using docker compose, the minio host is 'minio'. This is to allow clickhouse to connect to the minio server
+          const host = getConfig().runningMode === 'testing' ? 'minio' : endPoint;
+          // Construct the S3-style URL for the file
+          const minioUrl = `http://${host}:${port}/${bucket}/${file}`;
+
+          // Insert data into clickhouse
+          await insertFromS3(tableName, minioUrl, {
+            accessKey,
+            secretKey,
+          });
+        } else {
+          logger.warn(`Unknown file type - ${extension}`);
+        }
+        await rm(`tmp/${file}`);
+        logger.debug(`File ${file} deleted from tmp directory`);
       } catch (error) {
         logger.error(`Error processing file ${file}: ${error}`);
       }
