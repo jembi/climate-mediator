@@ -53,6 +53,10 @@ export const setupMediator = (mediatorConfigFilePath: string) => {
         emitter.on('error', (err: Error) => {
           logger.error(`Heartbeat failed: ${JSON.stringify(err)}`);
         });
+
+        emitter.on('config', (config: any) => {
+          logger.info(`Config: ${JSON.stringify(config)}`);
+        });
       });
     });
   } catch (err) {

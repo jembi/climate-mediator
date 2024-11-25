@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import { readFile } from 'fs/promises';
 import { getConfig } from './config/config';
 import logger from './logger';
 import routes from './routes/index';
@@ -14,7 +15,7 @@ app.use('/', routes);
 
 createMinioBucketListeners();
 
-app.listen(getConfig().port, () => {
+app.listen(getConfig().port, async() => {
   logger.info(`Server is running on port - ${getConfig().port}`);
 
   if (getConfig().runningMode !== 'testing' && getConfig().registerMediator) {
