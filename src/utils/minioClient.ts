@@ -5,11 +5,20 @@ import crypto from 'crypto';
 import { readFile, rm } from 'fs/promises';
 import { createTable, insertFromS3 } from './clickhouse';
 import { validateJsonFile, getCsvHeaders } from './file-validators';
+import { registerBucket } from '../openhim/openhim';
+
+export interface Bucket {
+  bucket: string;
+  region?: string;
+}
 
 const { endPoint, port, useSSL, bucketRegion, accessKey, secretKey, buckets, prefix, suffix } =
   getConfig().minio;
 
+const registeredBuckets: Set<string> = new Set();
+
 // Create a shared Minio client instance
+//TODO: Add error handling and connection check
 const minioClient = new Minio.Client({
   endPoint,
   port,
@@ -30,14 +39,22 @@ interface FileExistsResponse extends MinioResponse {
 /**
  * Ensures a bucket exists, creates it if it doesn't
  * @param {string} bucket - Bucket name
+ * @param {string} [region] - Bucket region
  * @returns {Promise<void>}
  */
-async function ensureBucketExists(bucket: string): Promise<void> {
+//TODO: use the bucket interface
+export async function ensureBucketExists(bucket: string, region?: string): Promise<void> {
   const exists = await minioClient.bucketExists(bucket);
   if (!exists) {
-    await minioClient.makeBucket(bucket, bucketRegion);
-    logger.info(`Bucket ${bucket} created in "${bucketRegion}"`);
+    //TODO: We Could add a flag to allow the user to create the bucket if it doesn't exist. maybe it could be on the url parameters so we know its an explicit action.
+    //TODO: Have the bucket region be optional and come from http request.
+    await minioClient.makeBucket(bucket, region);
+    logger.info(
+      `Bucket ${bucket} created${region ? `in "${region}"` : ' no region specified'}`
+    );
   }
+
+  await registerBucket(bucket);
 }
 
 /**
@@ -104,12 +121,13 @@ export async function uploadToMinio(
   sourceFile: string,
   destinationObject: string,
   bucket: string,
+  region: string,
   fileType: string,
   customMetadata = {}
 ): Promise<MinioResponse> {
   try {
     logger.info(`Uploading file ${sourceFile} to bucket ${bucket}`);
-    await ensureBucketExists(bucket);
+    await ensureBucketExists(bucket, region);
 
     const fileCheck = await checkFileExists(destinationObject, bucket, fileType);
     if (fileCheck.exists) {
@@ -134,6 +152,7 @@ export async function uploadToMinio(
       message: successMessage,
     };
   } catch (error) {
+    //TODO: see if we can make a specific error for failing to register the bucket within the mediator.
     const errorMessage = `Error uploading file: ${error instanceof Error ? error.message : String(error)}`;
     logger.error(errorMessage);
     return {
@@ -143,32 +162,30 @@ export async function uploadToMinio(
   }
 }
 
-export async function createMinioBucketListeners() {
-  const minioClient = new Minio.Client({
-    endPoint,
-    port,
-    useSSL,
-    accessKey,
-    secretKey,
-  });
-
-  try {
-    // Test connection by attempting to list buckets
-    await minioClient.listBuckets();
-    logger.info(`Successfully connected to Minio at ${endPoint}:${port}`);
-  } catch (error) {
-    logger.error(`Failed to connect to Minio: ${error}`);
-    throw error;
-  }
-
-  const listOfBuckets = buckets.split(',');
-
-  listOfBuckets.length === 0 && logger.warn('No buckets specified in the configuration');
+export async function createMinioBucketListeners(listOfBuckets: string[]) {
+  // try {
+  //   // Test connection by attempting to list buckets
+  //   await minioClient.listBuckets();
+  //   logger.info(`Successfully connected to Minio at ${endPoint}:${port}`);
+  // } catch (error) {
+  //   logger.error(`Failed to connect to Minio: ${error}`);
+  //   throw error;
+  // }
 
   for (const bucket of listOfBuckets) {
+    /*TODO:
+      Check if the buckets actually exist before registering listeners. if not then log an error.
+    */
+    if (registeredBuckets.has(bucket)) {
+      logger.info(`Bucket ${bucket} already registered`);
+      continue;
+    }
+
     const listener = minioClient.listenBucketNotification(bucket, prefix, suffix, [
       's3:ObjectCreated:*',
     ]);
+
+    registeredBuckets.add(bucket);
 
     logger.info(`Listening for notifications on bucket ${bucket}`);
 

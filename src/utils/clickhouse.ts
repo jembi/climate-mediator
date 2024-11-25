@@ -5,7 +5,6 @@ import logger from '../logger';
 const { clickhouse } = getConfig();
 const { url, password } = clickhouse;
 
-
 export async function createTable(fields: string[], tableName: string) {
   const client = createClient({
     url,
@@ -69,10 +68,14 @@ export function flattenJson(json: any, prefix = ''): string[] {
   return Array.from(fieldsSet);
 }
 
-export async function insertFromS3(tableName: string, s3Path: string, s3Config: {
-  accessKey: string,
-  secretKey: string
-}) {
+export async function insertFromS3(
+  tableName: string,
+  s3Path: string,
+  s3Config: {
+    accessKey: string;
+    secretKey: string;
+  }
+) {
   logger.info(`Inside the insertFromS3 function`);
   const client = createClient({
     url,
@@ -104,4 +107,3 @@ export async function insertFromS3(tableName: string, s3Path: string, s3Config: 
     await client.close();
   }
 }
-

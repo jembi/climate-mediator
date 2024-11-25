@@ -20,7 +20,8 @@
         "instant"
       ],
       "methods": [
-        "POST", "GET"
+        "POST",
+        "GET"
       ],
       "type": "http"
     }
@@ -35,15 +36,26 @@
       "type": "http"
     }
   ],
-  "configDefs": [{
-    "param": "minio_buckets_registry",
+  "configDefs": [
+    {
+      "param": "minio_buckets_registry",
       "displayName": "Minio Buckets Registry",
       "description": "The available Minio buckets and their configurations",
       "type": "struct",
       "array": true,
-      "template":[{
-        "param": "bucket",
-        "type": "string"
-      }]
-  }]
+      "template": [
+        {
+          "param": "bucket",
+          "displayName": "Bucket",
+          "type": "string"
+        },
+        {
+          "param": "region",
+          "displayName": "Region (optional)",
+          "type": "string",
+          "optional": true
+        }
+      ]
+    }
+  ]
 }
