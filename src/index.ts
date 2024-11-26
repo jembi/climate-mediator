@@ -3,7 +3,7 @@ import path from 'path';
 import { getConfig } from './config/config';
 import logger from './logger';
 import routes from './routes/index';
-import { getRegisterBuckets, setupMediator } from './openhim/openhim';
+import { getRegisteredBuckets, setupMediator } from './openhim/openhim';
 import { createMinioBucketListeners, ensureBucketExists } from './utils/minioClient';
 
 const app = express();
@@ -14,10 +14,10 @@ app.listen(getConfig().port, async () => {
   logger.info(`Server is running on port - ${getConfig().port}`);
 
   if (getConfig().runningMode !== 'testing' && getConfig().registerMediator) {
-    setupMediator();
+    await setupMediator();
   }
 
-  const buckets = await getRegisterBuckets();
+  const buckets = await getRegisteredBuckets();
 
   buckets.length === 0 && logger.warn('No buckets specified in the configuration');
 

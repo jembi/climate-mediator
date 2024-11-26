@@ -1,16 +1,11 @@
 import logger from '../logger';
+import { MinioBucketsRegistry, Mediator as OpenHimAPIMediator } from '../types';
 import { MediatorConfig } from '../types/mediatorConfig';
 import { RequestOptions } from '../types/request';
 import { getConfig } from '../config/config';
 import axios, { AxiosError } from 'axios';
 import https from 'https';
-import {
-  activateHeartbeat,
-  fetchConfig,
-  registerMediator,
-  authenticate,
-  genAuthHeaders,
-} from 'openhim-mediator-utils';
+import { activateHeartbeat, fetchConfig, registerMediator } from 'openhim-mediator-utils';
 import { Bucket, createMinioBucketListeners, ensureBucketExists } from '../utils/minioClient';
 import path from 'path';
 
@@ -23,7 +18,7 @@ const resolveMediatorConfig = (): MediatorConfig => {
   let mediatorConfigFile;
 
   try {
-    logger.info(`Loading mediator config from: ${mediatorConfigFilePath}`);
+    logger.debug(`Loading mediator config from: ${mediatorConfigFilePath}`);
     mediatorConfigFile = require(mediatorConfigFilePath);
   } catch (error) {
     logger.error(`Failed to parse JSON: ${error}`);
@@ -43,12 +38,12 @@ const resolveOpenhimConfig = (urn: string): RequestOptions => {
   };
 };
 
-export const setupMediator = () => {
+export const setupMediator = async () => {
   try {
     const mediatorConfig = resolveMediatorConfig();
     const openhimConfig = resolveOpenhimConfig(mediatorConfig.urn);
 
-    registerMediator(openhimConfig, mediatorConfig, (error: Error) => {
+    await registerMediator(openhimConfig, mediatorConfig, (error: Error) => {
       if (error) {
         logger.error(`Failed to register mediator: ${JSON.stringify(error)}`);
         throw error;
@@ -87,8 +82,8 @@ export const setupMediator = () => {
 };
 
 //TODO: Add Typing and error handling.
-async function getMediatorConfig() {
-  logger.info('Fetching mediator config from OpenHIM');
+async function getMediatorConfig(): Promise<OpenHimAPIMediator | null> {
+  logger.debug('Fetching mediator config from OpenHIM');
   const mediatorConfig = resolveMediatorConfig();
   const openhimConfig = resolveOpenhimConfig(mediatorConfig.urn);
 
@@ -108,17 +103,65 @@ async function getMediatorConfig() {
     return request.data;
   } catch (e) {
     const error = e as AxiosError;
-    logger.error(`Failed to fetch mediator config: ${JSON.stringify(error)}`);
-    error.status === 404 && logger.warn('Mediator config not found in OpenHIM, ');
+
+    switch (error.status) {
+      case 401:
+        logger.error(`Failed to authenticate with OpenHIM, check your credentials`);
+        break;
+      case 404:
+        logger.debug(
+          'Mediator config not found in OpenHIM, This is expected on initial setup'
+        );
+        break;
+      default:
+        logger.error(`Failed to fetch mediator config: ${JSON.stringify(error)}`);
+        break;
+    }
     return null;
   }
 }
 
-export async function getRegisterBuckets(): Promise<Bucket[]> {
+async function putMediatorConfig(mediatorUrn: string, mediatorConfig: MinioBucketsRegistry[]) {
+  const openhimConfig = resolveOpenhimConfig(mediatorUrn);
+  const { apiURL, username, password, trustSelfSigned } = openhimConfig;
+  await axios.put(
+    `${apiURL}/mediators/urn:mediator:climate-mediator/config`,
+    {
+      minio_buckets_registry: mediatorConfig,
+    },
+    {
+      auth: { username, password },
+      httpsAgent: new https.Agent({
+        rejectUnauthorized: !trustSelfSigned,
+      }),
+    }
+  );
+
+  try {
+    logger.info('Successfully updated mediator config in OpenHIM');
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    switch (axiosError.status) {
+      case 401:
+        logger.error(`Failed to authenticate with OpenHIM, check your credentials`);
+        break;
+      default:
+        logger.error(
+          `Failed to update mediator config in OpenHIM: ${JSON.stringify(axiosError)}`
+        );
+        break;
+    }
+  }
+}
+
+export async function getRegisteredBuckets(): Promise<Bucket[]> {
   if (runningMode !== 'testing') {
     logger.info('Fetching registered buckets from OpenHIM');
     const mediatorConfig = await getMediatorConfig();
 
+    if (!mediatorConfig) {
+      return [];
+    }
     //TODO: Handle errors, and undefined response.
     const buckets = mediatorConfig.config?.minio_buckets_registry as Bucket[];
     if (!buckets) {
@@ -133,13 +176,49 @@ export async function getRegisterBuckets(): Promise<Bucket[]> {
 }
 
 export async function registerBucket(bucket: string, region?: string) {
-  if (runningMode !== 'testing') {
+  // If we are in testing mode, we don't need to have the registered buckets persisted
+  if (runningMode === 'testing') {
+    logger.debug('Running in testing mode, skipping bucket registration');
     return true;
   }
-  const mediatorConfig = await getMediatorConfig();
-  const existingBuckets = mediatorConfig.config?.minio_buckets_registry;
 
-  if (!existingBuckets) {
-    return [];
+  //get the mediator config from OpenHIM
+  const mediatorConfig = await getMediatorConfig();
+
+  //TODO: Change this to a debug log
+  logger.debug(`Mediator config: ${JSON.stringify(mediatorConfig)}`);
+
+  //if the mediator config is not found, log the issue and return false
+  if (mediatorConfig === null) {
+    logger.error('Mediator config not found in OpenHIM, unable to register bucket');
+    return false;
   }
+
+  const newBucket = {
+    bucket,
+    region: region || '',
+  };
+
+  //get the existing buckets from the mediator config
+  const existingConfig = mediatorConfig.config;
+
+  if (existingConfig === undefined) {
+    logger.info('Mediator config does not have a config section, creating new config');
+    mediatorConfig['config'] = {
+      minio_buckets_registry: [newBucket],
+    };
+  } else {
+    const existingBucket = existingConfig.minio_buckets_registry.find(
+      (bucket) => bucket.bucket === newBucket.bucket
+    );
+    if (existingBucket) {
+      logger.debug(`Bucket ${bucket} already exists in the config`);
+      return false;
+    }
+    logger.info(`Adding bucket ${bucket} to OpenHIM config`);
+    existingConfig.minio_buckets_registry.push(newBucket);
+    await putMediatorConfig(mediatorConfig.urn, existingConfig.minio_buckets_registry);
+  }
+
+  return true;
 }

@@ -10,7 +10,7 @@
       "routes": [
         {
           "name": "Climate Mediator Endpoint",
-          "host": "172.17.0.1",
+          "host": "climate-mediator",
           "port": "3000",
           "primary": true,
           "type": "http"
@@ -29,7 +29,7 @@
   "endpoints": [
     {
       "name": "Climate Endpoint",
-      "host": "172.17.0.1",
+      "host": "climate-mediator",
       "path": "/test",
       "port": "3000",
       "primary": true,
@@ -57,5 +57,8 @@
         }
       ]
     }
-  ]
+  ],
+  "config": {
+    "minio_buckets_registry": []
+  }
 }

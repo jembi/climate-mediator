@@ -5,8 +5,12 @@ import { getCsvHeaders } from '../utils/file-validators';
 import logger from '../logger';
 import fs from 'fs/promises';
 import path from 'path';
-import e from 'express';
-import { uploadToMinio } from '../utils/minioClient';
+import {
+  BucketDoesNotExistError,
+  ensureBucketExists,
+  uploadToMinio,
+} from '../utils/minioClient';
+import { registerBucket } from '../openhim/openhim';
 
 // Constants
 const VALID_MIME_TYPES = ['text/csv', 'application/json'] as const;
@@ -77,7 +81,6 @@ const handleCsvFile = async (
       fileUrl,
       file.originalname,
       bucket,
-      region,
       file.mimetype
     );
     await fs.unlink(fileUrl);
@@ -104,6 +107,7 @@ routes.post('/upload', upload.single('file'), async (req, res) => {
     const file = req.file;
     const bucket = req.query.bucket as string;
     const region = req.query.region as string;
+    const createBucketIfNotExists = req.query.createBucketIfNotExists === 'true';
 
     if (!file) {
       logger.error('No file uploaded');
@@ -115,21 +119,31 @@ routes.post('/upload', upload.single('file'), async (req, res) => {
       return res.status(400).json(createErrorResponse('BUCKET_MISSING', 'No bucket provided'));
     }
 
+    await ensureBucketExists(bucket, region, createBucketIfNotExists);
+
     const response =
       file.mimetype === 'text/csv'
         ? await handleCsvFile(file, bucket, region)
         : handleJsonFile(file);
 
+    createBucketIfNotExists && (await registerBucket(bucket, region));
+
     const statusCode = response.status === 'success' ? 201 : 400;
     return res.status(statusCode).json(response);
-  } catch (error) {
-    logger.error('Error processing upload:', error);
+  } catch (e) {
+    logger.error('Error processing upload:', e);
+
+    if (e instanceof BucketDoesNotExistError) {
+      const error = e as BucketDoesNotExistError;
+      return res.status(400).json(createErrorResponse('BUCKET_DOES_NOT_EXIST', error.message));
+    }
+
     return res
       .status(500)
       .json(
         createErrorResponse(
           'INTERNAL_SERVER_ERROR',
-          error instanceof Error ? error.message : 'Unknown error'
+          e instanceof Error ? e.message : 'Unknown error'
         )
       );
   }
