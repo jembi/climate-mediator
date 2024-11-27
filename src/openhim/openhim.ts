@@ -1,5 +1,5 @@
 import logger from '../logger';
-import { MinioBucketsRegistry, Mediator as OpenHimAPIMediator } from '../types';
+import { MinioBucketsRegistry } from '../types';
 import { MediatorConfig } from '../types/mediatorConfig';
 import { RequestOptions } from '../types/request';
 import { getConfig } from '../config/config';
@@ -81,8 +81,7 @@ export const setupMediator = async () => {
   }
 };
 
-//TODO: Add Typing and error handling.
-async function getMediatorConfig(): Promise<OpenHimAPIMediator | null> {
+async function getMediatorConfig(): Promise<MediatorConfig | null> {
   logger.debug('Fetching mediator config from OpenHIM');
   const mediatorConfig = resolveMediatorConfig();
   const openhimConfig = resolveOpenhimConfig(mediatorConfig.urn);
@@ -155,24 +154,24 @@ async function putMediatorConfig(mediatorUrn: string, mediatorConfig: MinioBucke
 }
 
 export async function getRegisteredBuckets(): Promise<Bucket[]> {
-  if (runningMode !== 'testing') {
-    logger.info('Fetching registered buckets from OpenHIM');
-    const mediatorConfig = await getMediatorConfig();
-
-    if (!mediatorConfig) {
-      return [];
-    }
-    //TODO: Handle errors, and undefined response.
-    const buckets = mediatorConfig.config?.minio_buckets_registry as Bucket[];
-    if (!buckets) {
-      return [];
-    }
-    return buckets;
-  } else {
+  if (runningMode === 'testing') {
     logger.info('Running in testing mode, reading buckets from ENV');
     const buckets = getConfig().minio.buckets.split(',');
     return buckets.map((bucket) => ({ bucket, region: '' }));
   }
+
+  logger.info('Fetching registered buckets from OpenHIM');
+  const mediatorConfig = await getMediatorConfig();
+
+  if (!mediatorConfig) {
+    return [];
+  }
+
+  const buckets = mediatorConfig.config?.minio_buckets_registry as Bucket[];
+  if (buckets) {
+    return buckets;
+  }
+  return [];
 }
 
 export async function registerBucket(bucket: string, region?: string) {
@@ -185,7 +184,6 @@ export async function registerBucket(bucket: string, region?: string) {
   //get the mediator config from OpenHIM
   const mediatorConfig = await getMediatorConfig();
 
-  //TODO: Change this to a debug log
   logger.debug(`Mediator config: ${JSON.stringify(mediatorConfig)}`);
 
   //if the mediator config is not found, log the issue and return false

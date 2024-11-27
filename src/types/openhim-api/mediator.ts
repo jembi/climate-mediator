@@ -1,4 +1,4 @@
-export interface Mediator {
+export interface OpenhimMediatorConfiguration {
   _id: string;
   urn: string;
   version: string;
@@ -6,7 +6,7 @@ export interface Mediator {
   description: string;
   endpoints: Endpoint[];
   defaultChannelConfig: DefaultChannelConfig[];
-  configDefs: ConfigDef[];
+  configDefs: any[];
   __v: number;
   _lastHeartbeat: Date;
   _uptime: number;
@@ -21,17 +21,6 @@ interface Config {
 export interface MinioBucketsRegistry {
   bucket: string;
   region?: string;
-}
-
-interface ConfigDef {
-  param: string;
-  displayName: string;
-  description: string;
-  type: string;
-  values: any[];
-  template: Template[];
-  array: boolean;
-  _id: string;
 }
 
 interface Template {

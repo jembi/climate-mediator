@@ -101,6 +101,15 @@ const handleJsonFile = (file: Express.Multer.File): UploadResponse => {
   return createSuccessResponse('JSON_VALID', 'JSON file is valid - Future implementation');
 };
 
+const validateBucketName = (bucket: string): boolean => {
+  // Bucket names must be between 3 (min) and 63 (max) characters long.
+  // Bucket names can consist only of lowercase letters, numbers, dots (.), and hyphens (-).
+  // Bucket names must not start with the prefix xn--.
+  // Bucket names must not end with the suffix -s3alias. This suffix is reserved for access point alias names.
+  const regex = new RegExp(/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/);
+  return regex.test(bucket);
+};
+
 // Main route handler
 routes.post('/upload', upload.single('file'), async (req, res) => {
   try {
@@ -117,6 +126,18 @@ routes.post('/upload', upload.single('file'), async (req, res) => {
     if (!bucket) {
       logger.error('No bucket provided');
       return res.status(400).json(createErrorResponse('BUCKET_MISSING', 'No bucket provided'));
+    }
+
+    if (!validateBucketName(bucket)) {
+      logger.error(`Invalid bucket name ${bucket}`);
+      return res
+        .status(400)
+        .json(
+          createErrorResponse(
+            'INVALID_BUCKET_NAME',
+            'Bucket names must be between 3 (min) and 63 (max) characters long. Can consist only of lowercase letters, numbers, dots (.), and hyphens (-). Must not start with the prefix xn--. Must not end with the suffix -s3alias. This suffix is reserved for access point alias names.'
+          )
+        );
     }
 
     await ensureBucketExists(bucket, region, createBucketIfNotExists);

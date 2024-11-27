@@ -23,7 +23,6 @@ const { endPoint, port, useSSL, bucketRegion, accessKey, secretKey, buckets, pre
 const registeredBuckets: Set<string> = new Set();
 
 // Create a shared Minio client instance
-//TODO: Add error handling and connection check
 const minioClient = new Minio.Client({
   endPoint,
   port,
@@ -48,13 +47,11 @@ interface FileExistsResponse extends MinioResponse {
  * @param {boolean} [createBucketIfNotExists] - Whether to create the bucket if it doesn't exist
  * @returns {Promise<void>}
  */
-//TODO: use the bucket interface
 export async function ensureBucketExists(
   bucket: string,
   region?: string,
   createBucketIfNotExists = false
 ): Promise<void> {
-  //TODO: make sure the bucket name and region are valid and conform to the expected format.
   const exists = await minioClient.bucketExists(bucket);
   if (!exists && createBucketIfNotExists) {
     await minioClient.makeBucket(bucket, region);
@@ -163,7 +160,6 @@ export async function uploadToMinio(
       message: successMessage,
     };
   } catch (error) {
-    //TODO: see if we can make a specific error for failing to register the bucket within the mediator.
     const errorMessage = `Error uploading file: ${error instanceof Error ? error.message : String(error)}`;
     logger.error(errorMessage);
     return {
@@ -184,9 +180,6 @@ export async function createMinioBucketListeners(listOfBuckets: string[]) {
   // }
 
   for (const bucket of listOfBuckets) {
-    /*TODO:
-      Check if the buckets actually exist before registering listeners. if not then log an error.
-    */
     if (registeredBuckets.has(bucket)) {
       logger.info(`Bucket ${bucket} already registered`);
       continue;
@@ -230,10 +223,9 @@ export async function createMinioBucketListeners(listOfBuckets: string[]) {
           await createTable(fields, tableName);
 
           // If running locally and using docker compose, the minio host is 'minio'. This is to allow clickhouse to connect to the minio server
-          //TODO: This is not working the way I want it to, fix it later.
-          const host = 'minio';
+
           // Construct the S3-style URL for the file
-          const minioUrl = `http://${host}:${port}/${bucket}/${file}`;
+          const minioUrl = `http://${endPoint}:${port}/${bucket}/${file}`;
 
           // Insert data into clickhouse
           await insertFromS3(tableName, minioUrl, {
