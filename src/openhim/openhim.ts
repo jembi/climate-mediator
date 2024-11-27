@@ -1,6 +1,5 @@
 import logger from '../logger';
-import { MinioBucketsRegistry } from '../types';
-import { MediatorConfig } from '../types/mediatorConfig';
+import { MediatorConfig, MinioBucketsRegistry } from '../types/mediatorConfig';
 import { RequestOptions } from '../types/request';
 import { getConfig } from '../config/config';
 import axios, { AxiosError } from 'axios';
