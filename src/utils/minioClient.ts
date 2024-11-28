@@ -170,15 +170,6 @@ export async function uploadToMinio(
 }
 
 export async function createMinioBucketListeners(listOfBuckets: string[]) {
-  // try {
-  //   // Test connection by attempting to list buckets
-  //   await minioClient.listBuckets();
-  //   logger.info(`Successfully connected to Minio at ${endPoint}:${port}`);
-  // } catch (error) {
-  //   logger.error(`Failed to connect to Minio: ${error}`);
-  //   throw error;
-  // }
-
   for (const bucket of listOfBuckets) {
     if (registeredBuckets.has(bucket)) {
       logger.info(`Bucket ${bucket} already registered`);
