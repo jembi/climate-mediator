@@ -6,8 +6,21 @@ import { readFile, rm } from 'fs/promises';
 import { createTable, insertFromS3 } from './clickhouse';
 import { validateJsonFile, getCsvHeaders } from './file-validators';
 
+export interface Bucket {
+  bucket: string;
+  region?: string;
+}
+
+export class BucketDoesNotExistError extends Error {
+  constructor(message: string) {
+    super(message);
+  }
+}
+
 const { endPoint, port, useSSL, bucketRegion, accessKey, secretKey, buckets, prefix, suffix } =
   getConfig().minio;
+
+const registeredBuckets: Set<string> = new Set();
 
 // Create a shared Minio client instance
 const minioClient = new Minio.Client({
@@ -30,13 +43,26 @@ interface FileExistsResponse extends MinioResponse {
 /**
  * Ensures a bucket exists, creates it if it doesn't
  * @param {string} bucket - Bucket name
+ * @param {string} [region] - Bucket region
+ * @param {boolean} [createBucketIfNotExists] - Whether to create the bucket if it doesn't exist
  * @returns {Promise<void>}
  */
-async function ensureBucketExists(bucket: string): Promise<void> {
+export async function ensureBucketExists(
+  bucket: string,
+  region?: string,
+  createBucketIfNotExists = false
+): Promise<void> {
   const exists = await minioClient.bucketExists(bucket);
-  if (!exists) {
-    await minioClient.makeBucket(bucket, bucketRegion);
-    logger.info(`Bucket ${bucket} created in "${bucketRegion}"`);
+  if (!exists && createBucketIfNotExists) {
+    await minioClient.makeBucket(bucket, region);
+    logger.info(
+      `Bucket ${bucket} created${region ? `in "${region}"` : ' no region specified'}`
+    );
+    await createMinioBucketListeners([bucket]);
+  }
+
+  if (!exists && !createBucketIfNotExists) {
+    throw new BucketDoesNotExistError(`Bucket ${bucket} does not exist`);
   }
 }
 
@@ -109,9 +135,9 @@ export async function uploadToMinio(
 ): Promise<MinioResponse> {
   try {
     logger.info(`Uploading file ${sourceFile} to bucket ${bucket}`);
-    await ensureBucketExists(bucket);
 
     const fileCheck = await checkFileExists(destinationObject, bucket, fileType);
+
     if (fileCheck.exists) {
       return {
         success: false,
@@ -143,32 +169,18 @@ export async function uploadToMinio(
   }
 }
 
-export async function createMinioBucketListeners() {
-  const minioClient = new Minio.Client({
-    endPoint,
-    port,
-    useSSL,
-    accessKey,
-    secretKey,
-  });
-
-  try {
-    // Test connection by attempting to list buckets
-    await minioClient.listBuckets();
-    logger.info(`Successfully connected to Minio at ${endPoint}:${port}`);
-  } catch (error) {
-    logger.error(`Failed to connect to Minio: ${error}`);
-    throw error;
-  }
-
-  const listOfBuckets = buckets.split(',');
-
-  listOfBuckets.length === 0 && logger.warn('No buckets specified in the configuration');
-
+export async function createMinioBucketListeners(listOfBuckets: string[]) {
   for (const bucket of listOfBuckets) {
+    if (registeredBuckets.has(bucket)) {
+      logger.info(`Bucket ${bucket} already registered`);
+      continue;
+    }
+
     const listener = minioClient.listenBucketNotification(bucket, prefix, suffix, [
       's3:ObjectCreated:*',
     ]);
+
+    registeredBuckets.add(bucket);
 
     logger.info(`Listening for notifications on bucket ${bucket}`);
 
@@ -202,9 +214,9 @@ export async function createMinioBucketListeners() {
           await createTable(fields, tableName);
 
           // If running locally and using docker compose, the minio host is 'minio'. This is to allow clickhouse to connect to the minio server
-          const host = getConfig().runningMode === 'testing' ? 'minio' : endPoint;
+
           // Construct the S3-style URL for the file
-          const minioUrl = `http://${host}:${port}/${bucket}/${file}`;
+          const minioUrl = `http://${endPoint}:${port}/${bucket}/${file}`;
 
           // Insert data into clickhouse
           await insertFromS3(tableName, minioUrl, {

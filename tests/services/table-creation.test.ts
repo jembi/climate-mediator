@@ -2,7 +2,6 @@ import { expect } from 'chai';
 import { getCsvHeaders } from '../../src/utils/file-validators';
 import { createTable, flattenJson, generateDDL } from '../../src/utils/clickhouse';
 
-
 describe('Create Tables based on files', function () {
   this.timeout(60_000);
 
@@ -33,7 +32,9 @@ describe('Create Tables based on files', function () {
     const fields = getCsvHeaders(csvFile);
     if (!fields) throw new Error('No fields found');
     const result = generateDDL(fields, 'test');
-    expect(result).to.equal('CREATE TABLE test (table_id UUID DEFAULT generateUUIDv4(),id VARCHAR, name VARCHAR, age VARCHAR) ENGINE = MergeTree ORDER BY (table_id)');
+    expect(result).to.equal(
+      'CREATE TABLE test (table_id UUID DEFAULT generateUUIDv4(),id VARCHAR, name VARCHAR, age VARCHAR) ENGINE = MergeTree ORDER BY (table_id)'
+    );
   });
 
   it('should create a table based on a csv file', async () => {
