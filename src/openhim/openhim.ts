@@ -68,7 +68,7 @@ export const setupMediator = async () => {
           const buckets = config.minio_buckets_registry as Bucket[];
 
           for await (const { bucket, region } of buckets) {
-            await ensureBucketExists(bucket, region);
+            await ensureBucketExists(bucket, region, true);
           }
 
           createMinioBucketListeners(buckets.map((bucket) => bucket.bucket));
