@@ -7,6 +7,7 @@ import https from 'https';
 import { activateHeartbeat, fetchConfig, registerMediator } from 'openhim-mediator-utils';
 import { Bucket, createMinioBucketListeners, ensureBucketExists } from '../utils/minioClient';
 import path from 'path';
+import { validateBucketName } from '../utils/file-validators';
 
 const { openhimUsername, openhimPassword, openhimMediatorUrl, trustSelfSigned, runningMode } =
   getConfig();
@@ -65,13 +66,7 @@ export const setupMediator = async () => {
         emitter.on('config', async (config: any) => {
           logger.info('Received config from OpenHIM');
 
-          const buckets = config.minio_buckets_registry as Bucket[];
-
-          for await (const { bucket, region } of buckets) {
-            await ensureBucketExists(bucket, region);
-          }
-
-          createMinioBucketListeners(buckets.map((bucket) => bucket.bucket));
+          await initializeBuckets(config);
         });
       });
     });
@@ -79,6 +74,37 @@ export const setupMediator = async () => {
     logger.error('Unable to register mediator', err);
   }
 };
+
+/**
+ * Initializes the buckets based on the values in the mediator config
+ * if the bucket is invalid, it will be removed from the config
+ * otherwise, the bucket will be created if it doesn't exist
+ * and the listeners will be created for the valid buckets
+ *
+ * @param mediatorConfig - The mediator config
+ */
+async function initializeBuckets(mediatorConfig: MediatorConfig) {
+  const bucketsFromOpenhimConfig = mediatorConfig.config?.minio_buckets_registry as Bucket[];
+  const validBuckets: string[] = [];
+  const invalidBuckets: string[] = [];
+
+  for await (const { bucket, region } of bucketsFromOpenhimConfig) {
+    if (!validateBucketName(bucket)) {
+      logger.error(`Invalid bucket name ${bucket}, skipping`);
+      invalidBuckets.push(bucket);
+    } else {
+      await ensureBucketExists(bucket, region);
+      validBuckets.push(bucket);
+    }
+  }
+
+  await createMinioBucketListeners(validBuckets);
+
+  if (invalidBuckets.length > 0) {
+    await removeBucket(invalidBuckets);
+    logger.info(`Removed ${invalidBuckets.length} invalid buckets`);
+  }
+}
 
 async function getMediatorConfig(): Promise<MediatorConfig | null> {
   logger.debug('Fetching mediator config from OpenHIM');
@@ -166,9 +192,9 @@ export async function getRegisteredBuckets(): Promise<Bucket[]> {
     return [];
   }
 
-  const buckets = mediatorConfig.config?.minio_buckets_registry as Bucket[];
-  if (buckets) {
-    return buckets;
+  if (mediatorConfig) {
+    await initializeBuckets(mediatorConfig);
+    return mediatorConfig.config?.minio_buckets_registry as Bucket[];
   }
   return [];
 }
@@ -216,6 +242,30 @@ export async function registerBucket(bucket: string, region?: string) {
     existingConfig.minio_buckets_registry.push(newBucket);
     await putMediatorConfig(mediatorConfig.urn, existingConfig.minio_buckets_registry);
   }
+
+  return true;
+}
+
+export async function removeBucket(buckets: string[]) {
+  const mediatorConfig = await getMediatorConfig();
+
+  if (!mediatorConfig) {
+    logger.error('Mediator config not found in OpenHIM, unable to remove bucket');
+    return false;
+  }
+
+  const existingConfig = mediatorConfig.config;
+
+  if (existingConfig === undefined) {
+    logger.error('Mediator config does not have a config section, unable to remove bucket');
+    return false;
+  }
+
+  const updatedConfig = existingConfig.minio_buckets_registry.filter(
+    (b) => !buckets.includes(b.bucket)
+  );
+
+  await putMediatorConfig(mediatorConfig.urn, updatedConfig);
 
   return true;
 }
