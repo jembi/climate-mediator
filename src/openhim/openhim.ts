@@ -64,9 +64,18 @@ export const setupMediator = async () => {
         });
 
         emitter.on('config', async (config: any) => {
-          logger.info('Received config from OpenHIM');
-
-          await initializeBuckets(config);
+          const mediatorConfig = {
+            config: {
+              minio_buckets_registry: config.minio_buckets_registry,
+            },
+            defaultChannelConfig: [],
+            endpoints: [],
+            urn: config.urn,
+            version: config.version,
+            name: config.name,
+            description: config.description,
+          };
+          await initializeBuckets(mediatorConfig);
         });
       });
     });
@@ -83,7 +92,7 @@ export const setupMediator = async () => {
  *
  * @param mediatorConfig - The mediator config
  */
-async function initializeBuckets(mediatorConfig: MediatorConfig) {
+export async function initializeBuckets(mediatorConfig: MediatorConfig) {
   const bucketsFromOpenhimConfig = mediatorConfig.config?.minio_buckets_registry as Bucket[];
   const validBuckets: string[] = [];
   const invalidBuckets: string[] = [];
@@ -93,7 +102,7 @@ async function initializeBuckets(mediatorConfig: MediatorConfig) {
       logger.error(`Invalid bucket name ${bucket}, skipping`);
       invalidBuckets.push(bucket);
     } else {
-      await ensureBucketExists(bucket, region);
+      await ensureBucketExists(bucket, region, true);
       validBuckets.push(bucket);
     }
   }
@@ -106,7 +115,7 @@ async function initializeBuckets(mediatorConfig: MediatorConfig) {
   }
 }
 
-async function getMediatorConfig(): Promise<MediatorConfig | null> {
+export async function getMediatorConfig(): Promise<MediatorConfig | null> {
   logger.debug('Fetching mediator config from OpenHIM');
   const mediatorConfig = resolveMediatorConfig();
   const openhimConfig = resolveOpenhimConfig(mediatorConfig.urn);
