@@ -64,6 +64,7 @@ export const setupMediator = async () => {
         });
 
         emitter.on('config', async (config: any) => {
+          logger.debug('Received new configs from OpenHIM');
           const mediatorConfig = {
             config: {
               minio_buckets_registry: config.minio_buckets_registry,
