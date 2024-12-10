@@ -22,3 +22,12 @@ export function getCsvHeaders(file: Buffer) {
 
   return columns;
 }
+
+export function validateBucketName(bucket: string): boolean {
+  // Bucket names must be between 3 (min) and 63 (max) characters long.
+  // Bucket names can consist only of lowercase letters, numbers, dots (.), and hyphens (-).
+  // Bucket names must not start with the prefix xn--.
+  // Bucket names must not end with the suffix -s3alias. This suffix is reserved for access point alias names.
+  const regex = new RegExp(/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/);
+  return regex.test(bucket);
+}
