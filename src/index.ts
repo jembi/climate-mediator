@@ -22,7 +22,7 @@ app.listen(getConfig().port, async () => {
   buckets.length === 0 && logger.warn('No buckets specified in the configuration');
 
   for await (const { bucket, region } of buckets) {
-    await ensureBucketExists(bucket, region);
+    await ensureBucketExists(bucket, region, true);
   }
 
   createMinioBucketListeners(buckets.map((bucket) => bucket.bucket));
