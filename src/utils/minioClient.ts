@@ -172,7 +172,7 @@ export async function uploadToMinio(
 export async function createMinioBucketListeners(listOfBuckets: string[]) {
   for (const bucket of listOfBuckets) {
     if (registeredBuckets.has(bucket)) {
-      logger.info(`Bucket ${bucket} already registered`);
+      logger.debug(`Bucket ${bucket} already registered`);
       continue;
     }
 

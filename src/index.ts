@@ -3,6 +3,7 @@ import { getConfig } from './config/config';
 import logger from './logger';
 import routes from './routes/index';
 import { getMediatorConfig, initializeBuckets, setupMediator } from './openhim/openhim';
+import { MinioBucketsRegistry } from './types/mediatorConfig';
 
 const app = express();
 
@@ -16,9 +17,11 @@ app.listen(getConfig().port, async () => {
 
     const mediatorConfig = await getMediatorConfig();
     if (mediatorConfig) {
-      await initializeBuckets(mediatorConfig);
+      await initializeBuckets(
+        mediatorConfig.config?.minio_buckets_registry as MinioBucketsRegistry[]
+      );
     } else {
-      logger.error('Failed to fetch mediator config');
+      logger.warn('Failed to fetch mediator config, skipping bucket initialization');
     }
   } else {
     logger.info('Running in testing mode, skipping mediator setup');

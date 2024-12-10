@@ -1,7 +1,7 @@
 import logger from '../logger';
 import { MediatorConfig, MinioBucketsRegistry } from '../types/mediatorConfig';
 import { RequestOptions } from '../types/request';
-import { getConfig } from '../config/config';
+import { Config, getConfig } from '../config/config';
 import axios, { AxiosError } from 'axios';
 import https from 'https';
 import { activateHeartbeat, fetchConfig, registerMediator } from 'openhim-mediator-utils';
@@ -65,18 +65,7 @@ export const setupMediator = async () => {
 
         emitter.on('config', async (config: any) => {
           logger.debug('Received new configs from OpenHIM');
-          const mediatorConfig = {
-            config: {
-              minio_buckets_registry: config.minio_buckets_registry,
-            },
-            defaultChannelConfig: [],
-            endpoints: [],
-            urn: config.urn,
-            version: config.version,
-            name: config.name,
-            description: config.description,
-          };
-          await initializeBuckets(mediatorConfig);
+          await initializeBuckets(config.minio_buckets_registry);
         });
       });
     });
@@ -93,12 +82,16 @@ export const setupMediator = async () => {
  *
  * @param mediatorConfig - The mediator config
  */
-export async function initializeBuckets(mediatorConfig: MediatorConfig) {
-  const bucketsFromOpenhimConfig = mediatorConfig.config?.minio_buckets_registry as Bucket[];
+export async function initializeBuckets(buckets: MinioBucketsRegistry[]) {
+  if (!buckets) {
+    logger.error('No buckets found in mediator config');
+    return;
+  }
+
   const validBuckets: string[] = [];
   const invalidBuckets: string[] = [];
 
-  for await (const { bucket, region } of bucketsFromOpenhimConfig) {
+  for await (const { bucket, region } of buckets) {
     if (!validateBucketName(bucket)) {
       logger.error(`Invalid bucket name ${bucket}, skipping`);
       invalidBuckets.push(bucket);
@@ -186,27 +179,6 @@ async function putMediatorConfig(mediatorUrn: string, mediatorConfig: MinioBucke
         break;
     }
   }
-}
-
-export async function getRegisteredBuckets(): Promise<Bucket[]> {
-  if (runningMode === 'testing') {
-    logger.info('Running in testing mode, reading buckets from ENV');
-    const buckets = getConfig().minio.buckets.split(',');
-    return buckets.map((bucket) => ({ bucket, region: '' }));
-  }
-
-  logger.info('Fetching registered buckets from OpenHIM');
-  const mediatorConfig = await getMediatorConfig();
-
-  if (!mediatorConfig) {
-    return [];
-  }
-
-  if (mediatorConfig) {
-    await initializeBuckets(mediatorConfig);
-    return mediatorConfig.config?.minio_buckets_registry as Bucket[];
-  }
-  return [];
 }
 
 export async function registerBucket(bucket: string, region?: string) {

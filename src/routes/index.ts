@@ -138,7 +138,9 @@ routes.post('/upload', upload.single('file'), async (req, res) => {
         ? await handleCsvFile(file, bucket, region)
         : handleJsonFile(file);
 
-    createBucketIfNotExists && (await registerBucket(bucket, region));
+    if (createBucketIfNotExists && getConfig().runningMode !== 'testing') {
+      await registerBucket(bucket, region);
+    }
 
     const statusCode = response.status === 'success' ? 201 : 400;
     return res.status(statusCode).json(response);
