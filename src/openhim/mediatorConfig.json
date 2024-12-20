@@ -40,7 +40,7 @@
     {
       "param": "minio_buckets_registry",
       "displayName": "Minio Buckets Registry",
-      "description": "The available Minio buckets and their configurations",
+      "description": "The available Minio buckets and their configurations (Note: The names provided must be between 3 and 63 characters long, and can only contain lowercase letters, numbers, dots (.), and hyphens (-))",
       "type": "struct",
       "array": true,
       "template": [

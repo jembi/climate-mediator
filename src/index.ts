@@ -1,10 +1,9 @@
 import express from 'express';
-import path from 'path';
 import { getConfig } from './config/config';
 import logger from './logger';
 import routes from './routes/index';
-import { getRegisteredBuckets, setupMediator } from './openhim/openhim';
-import { createMinioBucketListeners, ensureBucketExists } from './utils/minioClient';
+import { getMediatorConfig, initializeBuckets, setupMediator } from './openhim/openhim';
+import { MinioBucketsRegistry } from './types/mediatorConfig';
 
 const app = express();
 
@@ -15,15 +14,16 @@ app.listen(getConfig().port, async () => {
 
   if (getConfig().runningMode !== 'testing' && getConfig().registerMediator) {
     await setupMediator();
+
+    const mediatorConfig = await getMediatorConfig();
+    if (mediatorConfig) {
+      await initializeBuckets(
+        mediatorConfig.config?.minio_buckets_registry as MinioBucketsRegistry[]
+      );
+    } else {
+      logger.warn('Failed to fetch mediator config, skipping bucket initialization');
+    }
+  } else {
+    logger.info('Running in testing mode, skipping mediator setup');
   }
-
-  const buckets = await getRegisteredBuckets();
-
-  buckets.length === 0 && logger.warn('No buckets specified in the configuration');
-
-  for await (const { bucket, region } of buckets) {
-    await ensureBucketExists(bucket, region, true);
-  }
-
-  createMinioBucketListeners(buckets.map((bucket) => bucket.bucket));
 });
