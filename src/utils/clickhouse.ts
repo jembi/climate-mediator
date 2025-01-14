@@ -41,8 +41,55 @@ export async function createTable(fields: string[], tableName: string) {
   return true;
 }
 
+export async function createTableFromJson(
+  s3Path: string,
+  s3Config: { accessKey: string; secretKey: string },
+  tableName: string,
+  key: string
+) {
+  const client = createClient({
+    url,
+    password,
+  });
+
+  const normalizedTableName = tableName.replace(/-/g, '_');
+
+  //check if the table exists
+  try {
+    const existsResult = await client.query({
+      query: `desc ${normalizedTableName}`,
+    });
+    logger.info(`Table ${normalizedTableName} already exists`);
+    await client.close();
+    return false;
+  } catch (error) {
+    logger.error(`Table ${normalizedTableName} does not exist`);
+  }
+
+  const query = generateDDLFromJson(s3Path, s3Config, normalizedTableName, key);
+  await client.query({ query });
+  await client.close();
+}
+
 export function generateDDL(fields: string[], tableName: string) {
   return `CREATE TABLE ${tableName} (table_id UUID DEFAULT generateUUIDv4(),${fields.map((field) => `${field} VARCHAR`).join(', ')}) ENGINE = MergeTree ORDER BY (table_id)`;
+}
+
+export function generateDDLFromJson(
+  s3Path: string,
+  s3Config: { accessKey: string; secretKey: string },
+  tableName: string,
+  key: string
+) {
+  const query = `
+  CREATE TABLE IF NOT EXISTS \`default\`.${tableName}
+  ENGINE = MergeTree
+  ORDER BY ${key} EMPTY
+  AS SELECT * 
+  FROM s3('${s3Path}', '${s3Config.accessKey}', '${s3Config.secretKey}', JSONEachRow)
+  SETTINGS schema_inference_make_columns_nullable = 0
+  `;
+  return query;
 }
 
 export function flattenJson(json: any, prefix = ''): string[] {
@@ -101,6 +148,44 @@ export async function insertFromS3(
     return true;
   } catch (error) {
     logger.error('Error inserting data from S3');
+    logger.error(error);
+    return false;
+  } finally {
+    await client.close();
+  }
+}
+
+export async function insertFromS3Json(
+  tableName: string,
+  s3Path: string,
+  s3Config: {
+    accessKey: string;
+    secretKey: string;
+  }
+) {
+  const client = createClient({
+    url,
+    password,
+  });
+
+  const normalizedTableName = tableName.replace(/-/g, '_');
+
+  try {
+    logger.debug(`Inserting data into ${normalizedTableName}`);
+    const query = `
+      INSERT INTO \`default\`.${normalizedTableName} 
+      SELECT * FROM s3(
+        '${s3Path}',
+        '${s3Config.accessKey}',
+        '${s3Config.secretKey}',
+        'JSONEachRow'
+      )
+    `;
+    await client.query({ query });
+    logger.info(`Successfully inserted data into ${normalizedTableName}`);
+    return true;
+  } catch (error) {
+    logger.error('Error inserting data from JSON');
     logger.error(error);
     return false;
   } finally {
