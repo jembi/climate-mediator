@@ -92,29 +92,6 @@ export function generateDDLFromJson(
   return query;
 }
 
-export function flattenJson(json: any, prefix = ''): string[] {
-  const fields: string[] = [];
-  Object.keys(json).forEach((key) => {
-    const value = json[key];
-    if (typeof value === 'object') {
-      if (key === 'main') {
-        fields.push(...flattenJson(value));
-      } else {
-        // This is to avoid having a prefix starting with numbers
-        if (Array.isArray(json)) {
-          fields.push(...flattenJson(value, prefix));
-        } else {
-          fields.push(...flattenJson(value, `${key}_`));
-        }
-      }
-    } else {
-      fields.push(`${prefix}${key}`);
-    }
-  });
-  const fieldsSet = new Set(fields);
-  return Array.from(fieldsSet);
-}
-
 export async function insertFromS3(
   tableName: string,
   s3Path: string,

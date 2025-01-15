@@ -6,7 +6,6 @@ import { readFile, rm } from 'fs/promises';
 import {
   createTable,
   createTableFromJson,
-  flattenJson,
   insertFromS3,
   insertFromS3Json,
 } from './clickhouse';
