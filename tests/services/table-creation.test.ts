@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import { getCsvHeaders } from '../../src/utils/file-validators';
-import { createTable, flattenJson, generateDDL } from '../../src/utils/clickhouse';
+import { createTable, generateDDL } from '../../src/utils/clickhouse';
 
 describe('Create Tables based on files', function () {
   this.timeout(60_000);
@@ -17,13 +17,6 @@ describe('Create Tables based on files', function () {
   it('should extract columns based on a csv file (windows - \\r\\n)', async () => {
     const csvFile = Buffer.from('id,name,age\r\n1,John,20\r\n2,Jane,21');
     const fields = getCsvHeaders(csvFile);
-    expect(fields).to.deep.equal(['id', 'name', 'age']);
-  });
-
-  it('should extract columns based on a json file', async () => {
-    const jsonFile = Buffer.from('[{"id":1,"name":"John","age":20}]');
-    const json = JSON.parse(jsonFile.toString());
-    const fields = flattenJson(json[0]);
     expect(fields).to.deep.equal(['id', 'name', 'age']);
   });
 

@@ -226,9 +226,6 @@ export async function createMinioBucketListeners(listOfBuckets: string[]) {
 
         if (extension === 'json' && validateJsonFile(fileBuffer)) {
           logger.info('File is a valid json file');
-          // flatten the json and pass it to clickhouse
-          //const fields = flattenJson(JSON.parse(fileBuffer.toString()));
-          //await createTable(fields, tableName);
 
           // Construct the S3-style URL for the file
           const minioUrl = `http://${endPoint}:${port}/${bucket}/${file}`;
