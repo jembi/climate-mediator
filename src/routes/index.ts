@@ -8,6 +8,7 @@ import path from 'path';
 import {
   BucketDoesNotExistError,
   ensureBucketExists,
+  minioListenerHandler,
   uploadToMinio,
 } from '../utils/minioClient';
 import { registerBucket } from '../openhim/openhim';
@@ -152,6 +153,27 @@ routes.post('/upload', upload.single('file'), async (req, res) => {
       return res.status(400).json(createErrorResponse('BUCKET_DOES_NOT_EXIST', error.message));
     }
 
+    return res
+      .status(500)
+      .json(
+        createErrorResponse(
+          'INTERNAL_SERVER_ERROR',
+          e instanceof Error ? e.message : 'Unknown error'
+        )
+      );
+  }
+});
+
+routes.get('/process-climate-data', async (req, res) => {
+  try {
+    const bucket = req.query.bucket as string;
+    const file = req.query.file as string;
+    const tableName = req.query.tableName as string;
+
+    await minioListenerHandler(bucket, file, tableName);
+
+    return res.status(200).json({bucket, file, tableName, clickhouseInsert: 'Success'});
+  } catch (e) {
     return res
       .status(500)
       .json(
