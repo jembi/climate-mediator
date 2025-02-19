@@ -191,8 +191,6 @@ export async function registerBucket(bucket: string, region?: string) {
   //get the mediator config from OpenHIM
   const mediatorConfig = await getMediatorConfig();
 
-  logger.debug(`Mediator config: ${JSON.stringify(mediatorConfig)}`);
-
   //if the mediator config is not found, log the issue and return false
   if (mediatorConfig === null) {
     logger.error('Mediator config not found in OpenHIM, unable to register bucket');

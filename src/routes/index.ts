@@ -70,12 +70,8 @@ const handleCsvFile = async (
   bucket: string,
   region: string
 ): Promise<UploadResponse> => {
-  const headers = getCsvHeaders(file.buffer);
-  if (!headers) {
-    return createErrorResponse('INVALID_CSV_FORMAT', 'Invalid CSV file format');
-  }
-
   const fileUrl = await saveCsvToTmp(file.buffer, file.originalname);
+
   try {
     const uploadResult = await uploadToMinio(
       fileUrl,
@@ -87,7 +83,7 @@ const handleCsvFile = async (
 
     return uploadResult.success
       ? createSuccessResponse('UPLOAD_SUCCESS', uploadResult.message)
-      : createErrorResponse('UPLOAD_FAILED', uploadResult.message);
+      : createErrorResponse('UPLOAD_SUCCESS_UPDATED_EXISTING_FILE', uploadResult.message);
   } catch (error) {
     logger.error('Error uploading file to Minio:', error);
     throw error;
