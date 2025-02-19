@@ -1,6 +1,6 @@
 {
   "name": "climate-mediator",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Processes climate-related data as an example of unstructured data handling",
   "repository": "git@github.com:jembi/climate-mediator.git",
   "author": "Jembi Health Systems NPC",
