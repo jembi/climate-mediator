@@ -20,6 +20,8 @@ export const getConfig = () => {
     openhimMediatorUrl: process.env.OPENHIM_MEDIATOR_URL || 'https://localhost:8080',
     openhimUsername: process.env.OPENHIM_USERNAME || 'root@openhim.org',
     openhimPassword: process.env.OPENHIM_PASSWORD || 'instant101',
+    openhimTransactionUrl: process.env.OPENHIM_TRANSACTION_URL || 'http://localhost:5001',
+    openhimClientToken: process.env.OPENHIM_CLIENT_CUSTOM_TOKEN || 'test',
     trustSelfSigned: process.env.TRUST_SELF_SIGNED === 'false' ? false : true,
     runningMode: process.env.MODE || '',
     bodySizeLimit: process.env.BODY_SIZE_LIMIT || '50mb',
