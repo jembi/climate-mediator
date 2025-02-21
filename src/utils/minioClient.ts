@@ -136,15 +136,6 @@ export async function uploadToMinio(
   try {
     logger.info(`Uploading file ${sourceFile} to bucket ${bucket}`);
 
-    const fileCheck = await checkFileExists(destinationObject, bucket, fileType);
-
-    if (fileCheck.exists) {
-      return {
-        success: false,
-        message: fileCheck.message,
-      };
-    }
-
     const metaData = {
       'Content-Type': fileType,
       'X-Upload-Id': crypto.randomUUID(),
@@ -162,10 +153,7 @@ export async function uploadToMinio(
   } catch (error) {
     const errorMessage = `Error uploading file: ${error instanceof Error ? error.message : String(error)}`;
     logger.error(errorMessage);
-    return {
-      success: false,
-      message: errorMessage,
-    };
+    throw new Error(`Filed to upload file ${sourceFile}`);
   }
 }
 
