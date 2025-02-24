@@ -44,7 +44,7 @@ const createSuccessResponse = (code: string, message: string): UploadResponse =>
   message,
 });
 
-const saveCsvToTmp = async (fileBuffer: Buffer, fileName: string): Promise<string> => {
+const saveToTmp = async (fileBuffer: Buffer, fileName: string): Promise<string> => {
   const tmpDir = path.join(process.cwd(), 'tmp');
   await fs.mkdir(tmpDir, { recursive: true });
 
@@ -75,7 +75,7 @@ const handleCsvFile = async (
     return createErrorResponse('INVALID_CSV_FORMAT', 'Invalid CSV file format');
   }
 
-  const fileUrl = await saveCsvToTmp(file.buffer, file.originalname);
+  const fileUrl = await saveToTmp(file.buffer, file.originalname);
   try {
     const uploadResult = await uploadToMinio(
       fileUrl,
@@ -94,11 +94,33 @@ const handleCsvFile = async (
   }
 };
 
-const handleJsonFile = (file: Express.Multer.File): UploadResponse => {
+const handleJsonFile = async (
+  file: Express.Multer.File,
+  bucket: string,
+  region: string
+): Promise<UploadResponse> => {
   if (!validateJsonFile(file.buffer)) {
     return createErrorResponse('INVALID_JSON_FORMAT', 'Invalid JSON file format');
   }
-  return createSuccessResponse('JSON_VALID', 'JSON file is valid - Future implementation');
+
+  const jsonString = file.buffer.toString().replace(/\n/g, '').replace(/\r/g, '');
+  const fileUrl = await saveToTmp(Buffer.from(jsonString), file.originalname);
+  try {
+    const uploadResult = await uploadToMinio(
+      fileUrl,
+      file.originalname,
+      bucket,
+      file.mimetype
+    );
+    await fs.unlink(fileUrl);
+
+    return uploadResult.success
+      ? createSuccessResponse('UPLOAD_SUCCESS', uploadResult.message)
+      : createErrorResponse('UPLOAD_FAILED', uploadResult.message);
+  } catch (error) {
+    logger.error('Error uploading file to Minio:', error);
+    throw error;
+  }
 };
 
 // Main route handler
@@ -136,7 +158,7 @@ routes.post('/upload', upload.single('file'), async (req, res) => {
     const response =
       file.mimetype === 'text/csv'
         ? await handleCsvFile(file, bucket, region)
-        : handleJsonFile(file);
+        : await handleJsonFile(file, bucket, region);
 
     if (createBucketIfNotExists && getConfig().runningMode !== 'testing') {
       await registerBucket(bucket, region);
