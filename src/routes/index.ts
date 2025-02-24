@@ -11,6 +11,7 @@ import {
   uploadToMinio,
 } from '../utils/minioClient';
 import { registerBucket } from '../openhim/openhim';
+import { ModelPredictionUsingChap } from '../services/ModelPredictionUsingChap';
 
 // Constants
 const VALID_MIME_TYPES = ['text/csv', 'application/json'] as const;
@@ -160,6 +161,49 @@ routes.post('/upload', upload.single('file'), async (req, res) => {
           e instanceof Error ? e.message : 'Unknown error'
         )
       );
+  }
+});
+
+routes.post('/predict', upload.single('file'), async (req, res) => {
+  try {
+    const file = req.file;
+    const bucket = req.query.bucket as string;
+    const region = req.query.region as string;
+    const chapUrl = process.env.CHAP_URL || 'http://localhost:8000'
+
+    const createBucketIfNotExists = req.query.createBucketIfNotExists === 'true';
+
+    if (!chapUrl) {
+      logger.error('Chap URL not set');
+      return res.status(500).json(createErrorResponse('ENV_MISSING', 'Chap URL not set'));
+    }
+
+    if (!file) {
+      logger.error('No file uploaded');
+      return res.status(400).json(createErrorResponse('FILE_MISSING', 'No file uploaded'));
+    }
+
+    const modelPrediction = new ModelPredictionUsingChap(chapUrl, logger);
+
+    const predictResponse = await modelPrediction.predict({ data: file.buffer.toString() });
+
+    if (predictResponse?.status === 'success') {
+      const predictionResults = await new Promise((resolve, reject) => {
+        const interval = setInterval(async () => {
+          const statusResponse = await modelPrediction.getStatus();
+          if (statusResponse?.status === 'idle' && statusResponse?.ready) {
+            clearInterval(interval);
+            resolve(modelPrediction.getResult());
+          }
+        }, 250);
+      });
+
+      return res.status(200).json(predictionResults);
+    }
+
+    return res.status(500).json({ error: 'Error predicting model' });
+  } catch (err) {
+    return res.status(500).json({ error: 'An unexpected error has occured' });
   }
 });
 
