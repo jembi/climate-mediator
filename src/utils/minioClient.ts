@@ -198,7 +198,7 @@ export async function createMinioBucketListeners(listOfBuckets: string[]) {
       const file = notification.s3.object.key;
 
       //@ts-ignore
-      const tableName = notification.s3.bucket.name;
+      const tableName = notification.s3.bucket.name + '_predictions';
 
       logger.info(`File received: ${file} from bucket ${tableName}`);
 
@@ -216,10 +216,10 @@ export async function createMinioBucketListeners(listOfBuckets: string[]) {
         if (extension === 'json' && validateJsonFile(fileBuffer)) {
           logger.debug('Now inserting ' + file + 'into clickhouse');
 
-          const key = getFirstField(JSON.parse(fileBuffer.toString()));
+          const groupByColumnName = getFirstField(JSON.parse(fileBuffer.toString()));
 
           // Create table from json
-          await createTableFromJson(minioUrl, { accessKey, secretKey }, tableName, key);
+          await createTableFromJson(minioUrl, { accessKey, secretKey }, tableName, groupByColumnName);
 
           // Insert data into clickhouse
           await insertFromS3Json(tableName, minioUrl, {

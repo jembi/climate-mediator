@@ -277,9 +277,9 @@ async function getPrediction(trainingFileFormData: FormData, historicFutureFormD
     })
     
     logger.debug(`CHAP Prediction Results: ${prediction.status === 201 ? 'Successful Received Prediction':'Failed to Received Prediction'}`);
-
-    const stringifiedPrediction = JSON.stringify(prediction.data);
-    const originalFileName = 'prediction-result.json';
+    const { predictions } = prediction.data
+    const stringifiedPrediction = JSON.stringify(predictions);
+    const originalFileName = `prediction-result.json`;
     const fileUrl = await saveToTmp(Buffer.from(stringifiedPrediction), originalFileName);
 
     await uploadToMinio(
@@ -289,17 +289,6 @@ async function getPrediction(trainingFileFormData: FormData, historicFutureFormD
       'application/json'
     );
     await fs.unlink(fileUrl);
-
-    //TODO: check if table does not exist
-    await client.exec({query: `CREATE TABLE ${bucket}_prediction (time_period String, predicted_value Float64) ENGINE = MergeTree ORDER BY (time_period);`});
-
-    await client.insert({
-      table: `${bucket}_prediction`,
-      values: prediction.data.predictions,
-      format: 'JSONEachRow'
-    });
-
-    logger.debug('Clickhouse Data Insertion Completed')
 
   } catch (error) {
     logger.error(`Failed to receive prediction: ${error}`);

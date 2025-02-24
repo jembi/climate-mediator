@@ -41,11 +41,22 @@ export async function createTable(fields: string[], tableName: string) {
   return true;
 }
 
+/**
+ * Create a table within clickhouse from the inferred schema from the json file
+ * if table already exists within the clickhouse function will return false
+ * 
+ * @param s3Path URL location of the json within Minio
+ * @param s3Config Access key and Secrete key credentials to access Minio
+ * @param tableName The name of the table to be created within Minio
+ * @param groupByColumnName The column the created table will be ORDERED By within clickhouse
+ * @returns 
+ */
+
 export async function createTableFromJson(
   s3Path: string,
   s3Config: { accessKey: string; secretKey: string },
   tableName: string,
-  key: string
+  groupByColumnName: string
 ) {
   const client = createClient({
     url,
@@ -54,19 +65,18 @@ export async function createTableFromJson(
 
   const normalizedTableName = tableName.replace(/-/g, '_');
 
-  //check if the table exists
   try {
     const existsResult = await client.query({
       query: `desc ${normalizedTableName}`,
     });
-    logger.info(`Table ${normalizedTableName} already exists`);
+    logger.debug(`Table ${normalizedTableName} already exists`);
     await client.close();
     return false;
   } catch (error) {
-    logger.error(`Table ${normalizedTableName} does not exist`);
+    logger.debug(`Table ${normalizedTableName} does not exist`);
   }
 
-  const query = generateDDLFromJson(s3Path, s3Config, normalizedTableName, key);
+  const query = generateDDLFromJson(s3Path, s3Config, normalizedTableName, groupByColumnName);
   await client.query({ query });
   await client.close();
 }
@@ -79,12 +89,12 @@ export function generateDDLFromJson(
   s3Path: string,
   s3Config: { accessKey: string; secretKey: string },
   tableName: string,
-  key: string
+  groupByColumnName: string
 ) {
   const query = `
   CREATE TABLE IF NOT EXISTS \`default\`.${tableName}
   ENGINE = MergeTree
-  ORDER BY ${key} EMPTY
+  ORDER BY ${groupByColumnName} EMPTY
   AS SELECT * 
   FROM s3('${s3Path}', '${s3Config.accessKey}', '${s3Config.secretKey}', JSONEachRow)
   SETTINGS schema_inference_make_columns_nullable = 0
