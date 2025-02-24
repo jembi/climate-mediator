@@ -49,14 +49,13 @@ interface FileExistsResponse extends MinioResponse {
  */
 export async function ensureBucketExists(
   bucket: string,
-  region?: string,
   createBucketIfNotExists = false
 ): Promise<void> {
   const exists = await minioClient.bucketExists(bucket);
   if (!exists && createBucketIfNotExists) {
-    await minioClient.makeBucket(bucket, region);
+    await minioClient.makeBucket(bucket);
     logger.info(
-      `Bucket ${bucket} created${region ? `in "${region}"` : ' no region specified'}`
+      `Bucket ${bucket} created}`
     );
     await createMinioBucketListeners([bucket]);
   }
@@ -190,27 +189,33 @@ export async function createMinioBucketListeners(listOfBuckets: string[]) {
         const extension = file.split('.').pop();
         logger.info(`File Downloaded - Type: ${extension}`);
 
+        const minioUrl = `http://${endPoint}:${port}/${bucket}/${file}`;
+
         if (extension === 'json' && validateJsonFile(fileBuffer)) {
           // flatten the json and pass it to clickhouse
           //const fields = flattenJson(JSON.parse(fileBuffer.toString()));
           //await createTable(fields, tableName);
-          logger.warn(`File type not currently supported- ${extension}`);
+          
+          //infer the URL
+          const result = await 
+
+
         } else if (extension === 'csv' && getCsvHeaders(fileBuffer)) {
           //get the first line of the csv file
-          const fields = (await readFile(`tmp/${file}`, 'utf8')).split('\n')[0].split(',');
+          // const fields = (await readFile(`tmp/${file}`, 'utf8')).split('\n')[0].split(',');
 
-          await createTable(fields, tableName);
+          // await createTable(fields, tableName);
 
-          // If running locally and using docker compose, the minio host is 'minio'. This is to allow clickhouse to connect to the minio server
+          // // If running locally and using docker compose, the minio host is 'minio'. This is to allow clickhouse to connect to the minio server
 
-          // Construct the S3-style URL for the file
-          const minioUrl = `http://${endPoint}:${port}/${bucket}/${file}`;
+          // // Construct the S3-style URL for the file
+          
 
-          // Insert data into clickhouse
-          await insertFromS3(tableName, minioUrl, {
-            accessKey,
-            secretKey,
-          });
+          // // Insert data into clickhouse
+          // await insertFromS3(tableName, minioUrl, {
+          //   accessKey,
+          //   secretKey,
+          // });
         } else {
           logger.warn(`Unknown file type - ${extension}`);
         }

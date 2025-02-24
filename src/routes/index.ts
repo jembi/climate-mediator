@@ -71,7 +71,6 @@ const validateJsonFile = (buffer: Buffer): boolean => {
 const handleCsvFile = async (
   files: Express.Multer.File[],
   bucket: string,
-  region: string
 ): Promise<UploadResponse> => {
   try {
     for (const file of files) {
@@ -155,7 +154,6 @@ routes.post('/upload', async (req, res) => {
       }
 
       const bucket = req.query.bucket as string;
-      const region = req.query.region as string;
       const createBucketIfNotExists = req.query.createBucketIfNotExists === 'true';
 
       if (!bucket) {
@@ -192,20 +190,20 @@ routes.post('/upload', async (req, res) => {
         contentType: futureFile.mimetype,
       });
 
+      await ensureBucketExists(bucket, createBucketIfNotExists);
       getPrediction(trainingFileFormData, historicFutureFormData, bucket);
 
-      await ensureBucketExists(bucket, region, createBucketIfNotExists);
+      
 
       if (createBucketIfNotExists && getConfig().runningMode !== 'testing') {
-        await registerBucket(bucket, region);
+        await registerBucket(bucket);
       }
 
       let response: UploadResponse;
       if (trainingFile.mimetype === 'text/csv') {
         response = await handleCsvFile(
           [trainingFile, historicFile, futureFile],
-          bucket,
-          region
+          bucket
         );
       } else {
         response = createErrorResponse('INVALID_FILE_TYPE', 'Invalid file type');

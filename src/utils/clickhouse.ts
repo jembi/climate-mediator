@@ -107,3 +107,43 @@ export async function insertFromS3(
     await client.close();
   }
 }
+
+export async function inferAndCreateFromJSON(
+  tableName: string,
+  s3Path: string,
+  s3Config: {
+    accessKey: string;
+    secretKey: string;
+  }
+) {
+  logger.debug(`Starting JSON table creation from inference`);
+  const client = createClient({
+    url,
+    password,
+  });
+  logger.debug(`s3Path: ${s3Path}`);
+  const normalizedTableName = tableName.replace(/-/g, '_');
+
+  try {
+    logger.debug(`Inserting data into ${normalizedTableName} from ${s3Path}`);
+    const query = `
+      INSERT INTO \`default\`.${normalizedTableName} 
+      SELECT * FROM s3(
+        '${s3Path}',
+        '${s3Config.accessKey}',
+        '${s3Config.secretKey}',
+        'CSVWithNames'
+      )
+    `;
+    logger.debug(`Query: ${query}`);
+    await client.query({ query });
+    logger.info(`Successfully inserted data into ${normalizedTableName}`);
+    return true;
+  } catch (error) {
+    logger.error('Error inserting data from S3');
+    logger.error(error);
+    return false;
+  } finally {
+    await client.close();
+  }
+}
