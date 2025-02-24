@@ -6,7 +6,7 @@
   "author": "Jembi Health Systems NPC",
   "main": "src/index.ts",
   "scripts": {
-    "dev": "npx nodemon --config restart.json",
+    "dev": "npx nodemon -r dotenv/config --config restart.json",
     "start": "ts-node -r dotenv/config src/index.ts",
     "format": "prettier --check --write '{src,tests}/**/*.ts'",
     "lint": "eslint . --ext .ts,.js --fix",

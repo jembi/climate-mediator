@@ -234,3 +234,11 @@ export async function createMinioBucketListeners(listOfBuckets: string[]) {
     });
   }
 }
+
+export function sanitizeBucketName(name: string) {
+  return name.toLowerCase()
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/^-+|-+$/g, '')
+    .replace(/\.{2,}/g, '.')
+    .substring(0, 63);
+}
