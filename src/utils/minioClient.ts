@@ -3,7 +3,12 @@ import { getConfig } from '../config/config';
 import logger from '../logger';
 import crypto from 'crypto';
 import { readFile, rm } from 'fs/promises';
-import { createTable, insertFromS3 } from './clickhouse';
+import {
+  createTable,
+  createTableFromJson,
+  insertFromS3,
+  insertFromS3Json,
+} from './clickhouse';
 import { validateJsonFile, getCsvHeaders } from './file-validators';
 
 export interface Bucket {
@@ -38,6 +43,23 @@ interface MinioResponse {
 
 interface FileExistsResponse extends MinioResponse {
   exists: boolean;
+}
+
+/**
+ * Get the first field of a json object
+ * @param {any} json - The json object
+ * @returns {string} - The first field
+ */
+function getFirstField(json: any) {
+  let obj: any;
+  if (Array.isArray(json) && json.length > 0) {
+    obj = json[0];
+  } else {
+    obj = json;
+  }
+
+  const fields = Object.keys(obj);
+  return fields[0];
 }
 
 /**
@@ -192,14 +214,18 @@ export async function createMinioBucketListeners(listOfBuckets: string[]) {
         const minioUrl = `http://${endPoint}:${port}/${bucket}/${file}`;
 
         if (extension === 'json' && validateJsonFile(fileBuffer)) {
-          // flatten the json and pass it to clickhouse
-          //const fields = flattenJson(JSON.parse(fileBuffer.toString()));
-          //await createTable(fields, tableName);
-          
-          //infer the URL
-          const result = await 
+          logger.debug('Now inserting ' + file + 'into clickhouse');
 
+          const key = getFirstField(JSON.parse(fileBuffer.toString()));
 
+          // Create table from json
+          await createTableFromJson(minioUrl, { accessKey, secretKey }, tableName, key);
+
+          // Insert data into clickhouse
+          await insertFromS3Json(tableName, minioUrl, {
+            accessKey,
+            secretKey,
+          });
         } else if (extension === 'csv' && getCsvHeaders(fileBuffer)) {
           //get the first line of the csv file
           // const fields = (await readFile(`tmp/${file}`, 'utf8')).split('\n')[0].split(',');
