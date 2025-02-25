@@ -1,15 +1,15 @@
+import crypto from 'crypto';
+import { readFile, rm } from 'fs/promises';
 import * as Minio from 'minio';
 import { getConfig } from '../config/config';
 import logger from '../logger';
-import crypto from 'crypto';
-import { readFile, rm } from 'fs/promises';
 import {
   createTable,
   createTableFromJson,
   insertFromS3,
   insertFromS3Json,
 } from './clickhouse';
-import { validateJsonFile, getCsvHeaders } from './file-validators';
+import { getCsvHeaders, validateJsonFile } from './file-validators';
 
 export interface Bucket {
   bucket: string;
@@ -74,17 +74,23 @@ export async function ensureBucketExists(
   region?: string,
   createBucketIfNotExists = false
 ): Promise<void> {
-  const exists = await minioClient.bucketExists(bucket);
-  if (!exists && createBucketIfNotExists) {
-    await minioClient.makeBucket(bucket, region);
-    logger.info(
-      `Bucket ${bucket} created${region ? `in "${region}"` : ' no region specified'}`
-    );
-    await createMinioBucketListeners([bucket]);
-  }
+  try {
+    const exists = await minioClient.bucketExists(bucket);
+    if (!exists && createBucketIfNotExists) {
+      await minioClient.makeBucket(bucket, region);
+      logger.info(
+        `Bucket ${bucket} created${region ? `in "${region}"` : ' no region specified'}`
+      );
+    }
 
-  if (!exists && !createBucketIfNotExists) {
-    throw new BucketDoesNotExistError(`Bucket ${bucket} does not exist`);
+    await createMinioBucketListeners([bucket]);
+
+    if (!exists && !createBucketIfNotExists) {
+      throw new BucketDoesNotExistError(`Bucket ${bucket} does not exist`);
+    }
+  } catch (error) {
+    logger.error(`Error ensuring bucket ${bucket} exists: ${error}`);
+    throw error;
   }
 }
 
@@ -175,6 +181,58 @@ export async function uploadToMinio(
 
     await minioClient.fPutObject(bucket, destinationObject, sourceFile, metaData);
     const successMessage = `File ${sourceFile} uploaded as object ${destinationObject} in bucket ${bucket}`;
+    logger.info(successMessage);
+
+    return {
+      success: true,
+      message: successMessage,
+    };
+  } catch (error) {
+    const errorMessage = `Error uploading file: ${error instanceof Error ? error.message : String(error)}`;
+    logger.error(errorMessage);
+    return {
+      success: false,
+      message: errorMessage,
+    };
+  }
+}
+
+/**
+ * Uploads a file buffer to Minio storage
+ * @param {Buffer} fileBuffer - Path to the file to upload
+ * @param {string} destinationObject - Name for the uploaded object
+ * @param {string} bucket - Bucket name
+ * @param {string} fileType - Type of file being uploaded
+ * @param {Object} [customMetadata={}] - Optional custom metadata
+ * @returns {Promise<MinioResponse>}
+ */
+export async function uploadFileBufferToMinio(
+  fileBuffer: Buffer,
+  destinationObject: string,
+  bucket: string,
+  fileType: string,
+  customMetadata = {}
+): Promise<MinioResponse> {
+  try {
+    logger.info(`Uploading file buffer ${customMetadata} to bucket ${bucket}`);
+
+    const fileCheck = await checkFileExists(destinationObject, bucket, fileType);
+
+    if (fileCheck.exists) {
+      return {
+        success: false,
+        message: fileCheck.message,
+      };
+    }
+
+    const metaData = {
+      'Content-Type': fileType,
+      'X-Upload-Id': crypto.randomUUID(),
+      ...customMetadata,
+    };
+
+    await minioClient.putObject(bucket, destinationObject, fileBuffer, fileBuffer.length, metaData);
+    const successMessage = `File buffer ${customMetadata} uploaded as object ${destinationObject} in bucket ${bucket}`;
     logger.info(successMessage);
 
     return {

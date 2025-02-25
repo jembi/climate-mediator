@@ -9,6 +9,7 @@ import {
   BucketDoesNotExistError,
   ensureBucketExists,
   sanitizeBucketName,
+  uploadFileBufferToMinio,
   uploadToMinio,
 } from '../utils/minioClient';
 import { registerBucket } from '../openhim/openhim';
@@ -99,7 +100,7 @@ const handleCsvFile = async (
 const handleJsonFile = async (
   file: Express.Multer.File,
   bucket: string,
-  region: string
+  region: string,
 ): Promise<UploadResponse> => {
   if (!validateJsonFile(file.buffer)) {
     return createErrorResponse('INVALID_JSON_FORMAT', 'Invalid JSON file format');
@@ -127,16 +128,12 @@ const handleJsonFile = async (
 
 const handleJsonPayload = async (file: Express.Multer.File, json: Object, bucket: string): Promise<UploadResponse> => {
   try {
-    const fileUrl = await saveToTmp(Buffer.from(JSON.stringify(json)), file.originalname);
-
-    const uploadResult = await uploadToMinio(
-      fileUrl,
+    const uploadResult = await uploadFileBufferToMinio(
+      Buffer.from(JSON.stringify(json)),
       file.originalname,
       bucket,
       file.mimetype
     );
-
-    await fs.unlink(fileUrl);
    
     return uploadResult.success
       ? createSuccessResponse('UPLOAD_SUCCESS', uploadResult.message)
@@ -145,7 +142,6 @@ const handleJsonPayload = async (file: Express.Multer.File, json: Object, bucket
     logger.error('Error uploading JSON file:', err);
     throw err;
   }
-  return createSuccessResponse('JSON_VALID', 'JSON file is valid - Future implementation');
 };
 
 // Main route handler
@@ -213,8 +209,8 @@ routes.post('/upload', upload.single('file'), async (req, res) => {
 routes.post('/predict', upload.single('file'), async (req, res) => {
   try {
     const file = req.file;
-    const region = process.env.MINIO_BUCKET_REGION || 'us-east-1'
-    const chapUrl = process.env.CHAP_URL || 'http://localhost:8000'
+    const region = process.env.MINIO_BUCKET_REGION 
+    const chapUrl = process.env.CHAP_URL
 
     if (!chapUrl) {
       logger.error('Chap URL not set');
