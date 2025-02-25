@@ -92,7 +92,7 @@ export async function insertFromS3(
         '${s3Path}',
         '${s3Config.accessKey}',
         '${s3Config.secretKey}',
-        'CSVWithNames'
+        ${s3Path.split('.').pop() === 'json' ? 'JSONEachRow' : 'CSVWithNames'}
       )
     `;
     logger.debug(`Query: ${query}`);
