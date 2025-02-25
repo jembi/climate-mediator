@@ -72,6 +72,7 @@ export const setupMediator = async () => {
 
         emitter.on('config', async (config: any) => {
           logger.debug('Received new configs from OpenHIM');
+          Config = config.minio_buckets_registry;
           await initializeBuckets(config.minio_buckets_registry);
         });
       });
@@ -80,6 +81,9 @@ export const setupMediator = async () => {
     logger.error('Unable to register mediator', err);
   }
 };
+
+let Config: any
+export const getOpenhimConfig = () => Config;
 
 /**
  * Initializes the buckets based on the values in the mediator config
