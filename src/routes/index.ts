@@ -252,7 +252,7 @@ routes.post('/predict', upload.single('file'), async (req, res) => {
 
       await ensureBucketExists(bucketName, region, true);
 
-      await handleJsonPayload(file, predictionResults, bucketName);
+      await handleJsonPayload(file, predictionResultsForMinio, bucketName);
 
       return res.status(200).json(predictionResultsForMinio);
     }
