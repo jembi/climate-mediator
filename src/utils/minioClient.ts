@@ -1,12 +1,17 @@
 import * as Minio from 'minio';
+import axios, { AxiosError } from 'axios';
+
 import { getConfig } from '../config/config';
 import logger from '../logger';
 import crypto from 'crypto';
 import { readFile, rm } from 'fs/promises';
-import { createTable, insertFromS3 } from './clickhouse';
+import { createTable, flattenJson, insertFromS3 } from './clickhouse';
 import { validateJsonFile, getCsvHeaders } from './file-validators';
-import { triggerProcessing } from '../openhim/openhim';
-
+import { getOpenhimConfig, triggerProcessing } from '../openhim/openhim';
+import fs from 'fs/promises';
+import { createWriteStream } from 'fs';
+import path from 'path';
+import { timeStamp } from 'console';
 export interface Bucket {
   bucket: string;
   region?: string;
@@ -212,30 +217,86 @@ export async function minioListenerHandler (bucket: string, file: string, tableN
   const extension = file.split('.').pop();
   logger.info(`File Downloaded - Type: ${extension}`);
 
-  if (extension === 'json' && validateJsonFile(fileBuffer)) {
-    // flatten the json and pass it to clickhouse
-    //const fields = flattenJson(JSON.parse(fileBuffer.toString()));
-    //await createTable(fields, tableName);
-    logger.warn(`File type not currently supported- ${extension}`);
-  } else if (extension === 'csv' && getCsvHeaders(fileBuffer)) {
-    //get the first line of the csv file
-    const fields = (await readFile(`tmp/${file}`, 'utf8')).split('\n')[0].split(',');
+  if (['json', 'csv'].includes(extension as string)) {
+    let fields: string[] = [];
 
-    await createTable(fields, tableName);
+    if (extension === 'json' && validateJsonFile(fileBuffer)) {
+      // flatten the json and pass it to clickhouse
+      fields = flattenJson(JSON.parse(fileBuffer.toString()));
+    } else if (getCsvHeaders(fileBuffer)) {
+      fields = (await readFile(`tmp/${file}`, 'utf8')).split('\n')[0].split(',');
+    }
 
-    // If running locally and using docker compose, the minio host is 'minio'. This is to allow clickhouse to connect to the minio server
+    if (fields.length) {
+      await createTable(fields, tableName);
 
-    // Construct the S3-style URL for the file
-    const minioUrl = `http://${endPoint}:${port}/${bucket}/${file}`;
+      // Construct the S3-style URL for the file
+      const minioUrl = `http://${endPoint}:${port}/${bucket}/${file}`;
 
-    // Insert data into clickhouse
-    await insertFromS3(tableName, minioUrl, {
-      accessKey,
-      secretKey,
-    });
+      // Insert data into clickhouse
+      await insertFromS3(tableName, minioUrl, {
+        accessKey,
+        secretKey,
+      });
+    }
   } else {
     logger.warn(`Unknown file type - ${extension}`);
   }
+
   await rm(`tmp/${file}`);
   logger.debug(`File ${file} deleted from tmp directory`);
+}
+
+/**
+ * Downloads the climate data (json or csv type) and uploads it into the minio buckets
+ * @param {string} bucket the name of the bucket to donwload data for. If not specified all the buckets will be processed
+ */
+export async function downloadFileAndUpload(bucket: string | undefined) {
+  const buckets = getOpenhimConfig();
+
+  const tmpDir = path.join(process.cwd(), 'tmp');
+  await fs.mkdir(tmpDir, { recursive: true });
+
+  for (let index = 0; index < buckets.length; index++) {
+    const bucketDetails = buckets[index];
+
+    logger.info(`Downloading file for bucket - ${bucketDetails.bucket}`);
+
+    if (bucket && bucketDetails.bucket != bucket) continue;
+
+    const headers = bucketDetails.authToken ? { Authorization: bucketDetails.authToken } : {};
+    const response = await axios({
+      method: 'GET',
+      url: bucketDetails.url,
+      responseType: 'stream',
+      headers
+    });
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');;
+
+    const fileUrl = path.join(tmpDir, `${timestamp}-${bucketDetails.fileName}`);
+    const writer = createWriteStream(fileUrl);
+    response.data.pipe(writer);
+
+    await new Promise((resolve, reject) => {
+      writer.on('finish', () => resolve(1));
+      writer.on('error', error => reject(error));
+    });
+
+    await fs.appendFile(fileUrl, '\n');
+
+    logger.info('Download finished');
+
+    const uploadResult = await uploadToMinio(
+      fileUrl,
+      `${timestamp}-${bucketDetails.fileName}`,
+      bucketDetails.bucket,
+      bucketDetails.fileName.split('.').pop() === 'csv' ? 'text/csv' : 'text/json'
+    );
+
+    if (!uploadResult.success) {
+      throw Error(`Upload to bucket ${bucketDetails.bucket} failed - ${uploadResult.message}`);
+    }
+    await fs.unlink(fileUrl);
+  }
 }
