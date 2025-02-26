@@ -1,17 +1,22 @@
 import * as Minio from 'minio';
-import axios, { AxiosError } from 'axios';
+import axios from 'axios';
 
 import { getConfig } from '../config/config';
 import logger from '../logger';
 import crypto from 'crypto';
 import { readFile, rm } from 'fs/promises';
-import { createTable, flattenJson, insertFromS3 } from './clickhouse';
+import {
+  createTable,
+  createTableFromJson,
+  insertFromS3,
+  insertFromS3Json,
+} from './clickhouse';
 import { validateJsonFile, getCsvHeaders } from './file-validators';
 import { getOpenhimConfig, triggerProcessing } from '../openhim/openhim';
 import fs from 'fs/promises';
 import { createWriteStream } from 'fs';
 import path from 'path';
-import { timeStamp } from 'console';
+
 export interface Bucket {
   bucket: string;
   region?: string;
@@ -44,6 +49,23 @@ interface MinioResponse {
 
 interface FileExistsResponse extends MinioResponse {
   exists: boolean;
+}
+
+/**
+ * Get the first field of a json object
+ * @param {any} json - The json object
+ * @returns {string} - The first field
+ */
+function getFirstField(json: any) {
+  let obj: any;
+  if (Array.isArray(json) && json.length > 0) {
+    obj = json[0];
+  } else {
+    obj = json;
+  }
+
+  const fields = Object.keys(obj);
+  return fields[0];
 }
 
 /**
@@ -217,32 +239,41 @@ export async function minioListenerHandler (bucket: string, file: string, tableN
   const extension = file.split('.').pop();
   logger.info(`File Downloaded - Type: ${extension}`);
 
-  if (['json', 'csv'].includes(extension as string)) {
-    let fields: string[] = [];
+  if (extension === 'json' && validateJsonFile(fileBuffer)) {
+    logger.info('File is a valid json file');
 
-    if (extension === 'json' && validateJsonFile(fileBuffer)) {
-      // flatten the json and pass it to clickhouse
-      fields = flattenJson(JSON.parse(fileBuffer.toString()));
-    } else if (getCsvHeaders(fileBuffer)) {
-      fields = (await readFile(`tmp/${file}`, 'utf8')).split('\n')[0].split(',');
-    }
+    // Construct the S3-style URL for the file
+    const minioUrl = `http://${endPoint}:${port}/${bucket}/${file}`;
 
-    if (fields.length) {
-      await createTable(fields, tableName);
+    const key = getFirstField(JSON.parse(fileBuffer.toString()));
 
-      // Construct the S3-style URL for the file
-      const minioUrl = `http://${endPoint}:${port}/${bucket}/${file}`;
+    // Create table from json
+    await createTableFromJson(minioUrl, { accessKey, secretKey }, tableName, key);
 
-      // Insert data into clickhouse
-      await insertFromS3(tableName, minioUrl, {
-        accessKey,
-        secretKey,
-      });
-    }
+    // Insert data into clickhouse
+    await insertFromS3Json(tableName, minioUrl, {
+      accessKey,
+      secretKey,
+    });
+  } else if (extension === 'csv' && getCsvHeaders(fileBuffer)) {
+    //get the first line of the csv file
+    const fields = (await readFile(`tmp/${file}`, 'utf8')).split('\n')[0].split(',');
+
+    await createTable(fields, tableName);
+
+    // If running locally and using docker compose, the minio host is 'minio'. This is to allow clickhouse to connect to the minio server
+
+    // Construct the S3-style URL for the file
+    const minioUrl = `http://${endPoint}:${port}/${bucket}/${file}`;
+
+    // Insert data into clickhouse
+    await insertFromS3(tableName, minioUrl, {
+      accessKey,
+      secretKey,
+    });
   } else {
     logger.warn(`Unknown file type - ${extension}`);
   }
-
   await rm(`tmp/${file}`);
   logger.debug(`File ${file} deleted from tmp directory`);
 }
