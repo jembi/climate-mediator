@@ -8,9 +8,12 @@ import path from 'path';
 import {
   BucketDoesNotExistError,
   ensureBucketExists,
+  sanitizeBucketName,
+  uploadFileBufferToMinio,
   uploadToMinio,
 } from '../utils/minioClient';
 import { registerBucket } from '../openhim/openhim';
+import { ModelPredictionUsingChap } from '../services/ModelPredictionUsingChap';
 
 // Constants
 const VALID_MIME_TYPES = ['text/csv', 'application/json'] as const;
@@ -97,7 +100,7 @@ const handleCsvFile = async (
 const handleJsonFile = async (
   file: Express.Multer.File,
   bucket: string,
-  region: string
+  region: string,
 ): Promise<UploadResponse> => {
   if (!validateJsonFile(file.buffer)) {
     return createErrorResponse('INVALID_JSON_FORMAT', 'Invalid JSON file format');
@@ -120,6 +123,24 @@ const handleJsonFile = async (
   } catch (error) {
     logger.error('Error uploading file to Minio:', error);
     throw error;
+  }
+};
+
+const handleJsonPayload = async (file: Express.Multer.File, json: Object, bucket: string): Promise<UploadResponse> => {
+  try {
+    const uploadResult = await uploadFileBufferToMinio(
+      Buffer.from(JSON.stringify(json)),
+      file.originalname,
+      bucket,
+      file.mimetype
+    );
+   
+    return uploadResult.success
+      ? createSuccessResponse('UPLOAD_SUCCESS', uploadResult.message)
+      : createErrorResponse('UPLOAD_FAILED', uploadResult.message);
+  } catch (err) {
+    logger.error('Error uploading JSON file:', err);
+    throw err;
   }
 };
 
@@ -182,6 +203,65 @@ routes.post('/upload', upload.single('file'), async (req, res) => {
           e instanceof Error ? e.message : 'Unknown error'
         )
       );
+  }
+});
+
+routes.post('/predict', upload.single('file'), async (req, res) => {
+  try {
+    const file = req.file;
+    const region = process.env.MINIO_BUCKET_REGION 
+    const chapUrl = process.env.CHAP_URL
+
+    if (!chapUrl) {
+      logger.error('Chap URL not set');
+      return res.status(500).json(createErrorResponse('ENV_MISSING', 'Chap URL not set'));
+    }
+
+    if (!file) {
+      logger.error('No file uploaded');
+      return res.status(400).json(createErrorResponse('FILE_MISSING', 'No file uploaded'));
+    }
+
+    const modelPrediction = new ModelPredictionUsingChap(chapUrl, logger);
+
+    // start the Chap prediction job
+    const predictResponse = await modelPrediction.predict({ data: file.buffer.toString() });
+
+    if (predictResponse?.status === 'success') {
+      // wait for the prediction job to finish
+      const predictionResults = await new Promise((resolve, reject) => {
+        const interval = setInterval(async () => {
+          const statusResponse = await modelPrediction.getStatus();
+          if (statusResponse?.status === 'idle' && statusResponse?.ready) {
+            clearInterval(interval);
+            resolve((await modelPrediction.getResult()).data);
+          }
+        }, 250);
+      }) as any;
+
+      const bucketName = sanitizeBucketName(
+        `${file.originalname.split('.')[0]}-${Math.round(new Date().getTime() / 1000)}`
+      )
+
+      const predictionResultsForMinio = predictionResults?.dataValues?.map((d: any) => {
+        return {
+          ...d,
+          diseaseId: predictionResults.diseaseId as string,
+        }
+      });
+
+      await ensureBucketExists(bucketName, region, true);
+
+      await handleJsonPayload(file, predictionResultsForMinio, bucketName);
+
+      return res.status(200).json(predictionResultsForMinio);
+    }
+
+    return res.status(500).json({ error: 'Error predicting model. Error response from Chap API' });
+  } catch (err) {
+    logger.error('Error predicting model:');
+    logger.error(err);
+    return res.status(500).json({ error: 'An unexpected error has occured' });
   }
 });
 
