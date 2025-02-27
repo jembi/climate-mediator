@@ -63,6 +63,10 @@ export async function createTableFromJson(
     password,
   });
 
+  const ping = await client.ping();
+
+  logger.info(`Clickhouse Ping: ${ping.success}`);
+
   const normalizedTableName = tableName.replace(/-/g, '_');
 
   try {
@@ -73,12 +77,28 @@ export async function createTableFromJson(
     await client.close();
     return false;
   } catch (error) {
-    logger.debug(`Table ${normalizedTableName} does not exist`);
+    logger.info(`Table ${normalizedTableName} does not exist`);
   }
 
-  const query = generateDDLFromJson(s3Path, s3Config, normalizedTableName, groupByColumnName);
-  await client.query({ query });
-  await client.close();
+  try {
+
+    logger.info(`Creating table from JSON ${normalizedTableName}`);
+
+    const query = generateDDLFromJson(s3Path, s3Config, normalizedTableName, groupByColumnName);
+    const res = await client.query({ query });
+
+    logger.info(`Successfully created table from JSON ${normalizedTableName}`);
+    logger.info(res);
+
+    await client.close();
+
+    return true;
+  } catch (err) {
+    logger.error(`Error creating table from JSON ${normalizedTableName}`);
+    logger.error(err);
+    return false;
+  }
+  
 }
 
 export function generateDDL(fields: string[], tableName: string) {
@@ -99,6 +119,9 @@ export function generateDDLFromJson(
   FROM s3('${s3Path}', '${s3Config.accessKey}', '${s3Config.secretKey}', JSONEachRow)
   SETTINGS schema_inference_make_columns_nullable = 0
   `;
+
+  logger.info(`Query: ${query}`);
+
   return query;
 }
 
