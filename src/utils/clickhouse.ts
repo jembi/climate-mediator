@@ -1,6 +1,7 @@
 import { createClient } from '@clickhouse/client';
 import { getConfig } from '../config/config';
 import logger from '../logger';
+import { HistoricData } from './file-validators';
 
 const { clickhouse } = getConfig();
 const { url, password } = clickhouse;
@@ -217,8 +218,8 @@ export async function createHistoricalDiseaseTable() {
     await client.query({
       query: `
                 CREATE TABLE IF NOT EXISTS historical_disease (
-                    ou String,
-                    pe String,
+                    organizational_unit String,
+                    period String,
                     value Int64
                 ) ENGINE = MergeTree()
                 ORDER BY (ou)
@@ -232,7 +233,7 @@ export async function createHistoricalDiseaseTable() {
 }
 
 export async function insertHistoricDiseaseData(
-  diseaseData: { ou: string; pe: string; value: number }[]
+  diseaseData: HistoricData[]
 ) {
   const client = createClient({
     url: 'http://localhost:8123',

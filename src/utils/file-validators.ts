@@ -1,3 +1,9 @@
+export interface HistoricData{
+  organizational_unit: string;
+  period: string;
+  value: number;
+}
+
 export function validateJsonFile(file: Buffer) {
   const json = file.toString();
   try {
@@ -32,7 +38,7 @@ export function validateBucketName(bucket: string): boolean {
   return regex.test(bucket);
 }
 
-export function extractHistoricData(jsonStringified: string): { ou: string; pe: string; value: number }[]{
+export function extractHistoricData(jsonStringified: string): HistoricData[]{
   const jsonPayload = JSON.parse(jsonStringified);
   //@ts-ignore
   const diseaseCases = jsonPayload.features.find(feature => feature['featureId'] === 'disease_cases')
@@ -42,5 +48,10 @@ export function extractHistoricData(jsonStringified: string): { ou: string; pe: 
   }
 
   const {data} = diseaseCases;
-  return data;
+  const historicData = data.map((datum: {ou: string, pe: string, value: number}) => ({
+    organizational_unit: datum.ou,
+    period: datum.pe,
+    value: datum.value,
+  }));
+  return historicData;
 }
