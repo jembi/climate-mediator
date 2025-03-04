@@ -14,6 +14,7 @@ import {
 } from '../utils/minioClient';
 import { registerBucket } from '../openhim/openhim';
 import { ModelPredictionUsingChap } from '../services/ModelPredictionUsingChap';
+import { createOrganizationsTable, insertOrganizationIntoTable } from '../utils/clickhouse';
 
 // Constants
 const VALID_MIME_TYPES = ['text/csv', 'application/json'] as const;
@@ -126,6 +127,10 @@ const handleJsonFile = async (
   }
 };
 
+function sanitizeTableName(tableName: string): string {
+  return tableName.replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
 const handleJsonPayload = async (file: Express.Multer.File, json: Object, bucket: string): Promise<UploadResponse> => {
   try {
     const uploadResult = await uploadFileBufferToMinio(
@@ -134,6 +139,12 @@ const handleJsonPayload = async (file: Express.Multer.File, json: Object, bucket
       bucket,
       file.mimetype
     );
+
+    const tableNameOrganizations = sanitizeTableName(file.originalname) + '_organizations_' + (new Date().getMilliseconds());
+
+    await createOrganizationsTable(tableNameOrganizations);
+    
+    await insertOrganizationIntoTable(tableNameOrganizations, file.buffer.toString());
    
     return uploadResult.success
       ? createSuccessResponse('UPLOAD_SUCCESS', uploadResult.message)
@@ -239,6 +250,9 @@ routes.post('/predict', upload.single('file'), async (req, res) => {
         }, 250);
       }) as any;
 
+      // get organization code
+      const orgCode = JSON.parse(file.buffer.toString())?.orgUnitsGeoJson.features[0].properties.code;
+
       const bucketName = sanitizeBucketName(
         `${file.originalname.split('.')[0]}-${Math.round(new Date().getTime() / 1000)}`
       )
@@ -246,6 +260,7 @@ routes.post('/predict', upload.single('file'), async (req, res) => {
       const predictionResultsForMinio = predictionResults?.dataValues?.map((d: any) => {
         return {
           ...d,
+          orgCode: orgCode ?? undefined,
           diseaseId: predictionResults.diseaseId as string,
         }
       });
