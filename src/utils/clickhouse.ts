@@ -214,18 +214,20 @@ export async function insertOrganizationIntoTable(
     const name = json.orgUnitsGeoJson.features[0].properties.name;
     const level = json.orgUnitsGeoJson.features[0].properties.level;
     const coordinates = json.orgUnitsGeoJson.features[0].geometry.coordinates[0];
-    
-    const encodedCoordinates = JSON.stringify(coordinates)
 
-    const query = `
-      INSERT INTO \`default\`.\`${normalizedTableName}\`
-      (code, name, level, coordinates)
-      VALUES ('${code}', '${name}', '${level}', ${encodedCoordinates})
-    `;
+    await client.insert({
+      table: 'default.' + normalizedTableName,
+      values: [
+        {
+          code,
+          name,
+          level,
+          coordinates,
+        },
+      ],
+      format: 'JSONEachRow',
+    })
 
-    logger.info(query);
-
-    await client.query({ query });
     logger.info(`Successfully inserted data into ${normalizedTableName}`);
     return true;
   } catch (error) {
@@ -261,17 +263,19 @@ export async function createOrganizationsTable(
   }
 
   try {
-
+    
     const query = `
       CREATE TABLE IF NOT EXISTS \`default\`.${normalizedTableName}
       ( code String,
        name String,
        level String,
-       coordinates Array(Array(Float64))
+       coordinates Array(Array(Float32))
       )
       ENGINE = MergeTree
       ORDER BY code
     `;
+
+    logger.info(query);
 
     const res = await client.query({ query });
 
