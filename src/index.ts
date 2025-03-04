@@ -4,13 +4,36 @@ import logger from './logger';
 import routes from './routes/index';
 import { getMediatorConfig, initializeBuckets, setupMediator } from './openhim/openhim';
 import { MinioBucketsRegistry } from './types/mediatorConfig';
+import { createClient } from '@clickhouse/client';
 
 const app = express();
 
 app.use('/', routes);
 
 app.listen(getConfig().port, async () => {
+  const {
+    clickhouse: { url, password },
+  } = getConfig();
+
+  const client = createClient({
+    url,
+    password,
+  });
+
+  const result = await client.ping();
+
+  if (!result.success) {
+    logger.error(
+      'Connection to ClickHouse failed. Verify your ClickHouse credentials and ensure the ClickHouse instance is online'
+    );
+  } else {
+    logger.debug('Connection to ClickHouse successful');
+  }
+
+  client.close();
+
   logger.info(`Server is running on port - ${getConfig().port}`);
+  logger.debug(`Running in ${getConfig().runningMode} mode`);
 
   if (getConfig().runningMode !== 'testing' && getConfig().registerMediator) {
     await setupMediator();
