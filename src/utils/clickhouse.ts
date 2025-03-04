@@ -194,6 +194,40 @@ export async function insertFromS3Json(
   }
 }
 
+function isNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function checkType(feature: any):
+  {type: 'point', latitude: number, longitude: number} |
+  {type: 'polygon', coordinates: [[number, number]]}
+{
+  const type = feature?.geometry?.type?.toLowerCase();
+
+  if (type == 'point') {
+    if (Array.isArray(feature?.geometry?.coordinates) &&
+        feature.geometry.coordinates.every(isNumber)) {
+      return {
+        type: 'point',
+        latitude: feature.geometry.coordinates[0],
+        longitude: feature.geometry.coordinates[1],
+      };
+    }
+  }
+
+  if (type == 'polygon') {
+    if (Array.isArray(feature?.geometry?.coordinates?.[0]) &&
+        feature.geometry.coordinates?.[0].every(Array.isArray)) {
+      return {
+        type : 'polygon',
+        coordinates: feature.geometry.coordinates[0] as any,
+      };
+    }
+  }
+
+  throw new Error('Invalid geometry type', {cause: feature});
+}
+
 export async function insertOrganizationIntoTable(
   tableName: string,
   payload: string,
@@ -210,21 +244,23 @@ export async function insertOrganizationIntoTable(
   try {
     const json = JSON.parse(payload);
 
-    const code = json.orgUnitsGeoJson.features[0].properties.code;
-    const name = json.orgUnitsGeoJson.features[0].properties.name;
-    const level = json.orgUnitsGeoJson.features[0].properties.level;
-    const coordinates = json.orgUnitsGeoJson.features[0].geometry.coordinates[0];
+    const values = json.orgUnitsGeoJson.features.map((feature: any) => {
+      const type = checkType(feature);
+
+      return {
+        code: feature.properties.code,
+        name: feature.properties.name,
+        level: feature.properties.level,
+        type: type.type,
+        latitude: type.type == 'point' ? type.latitude : null,
+        longitude: type.type == 'point' ? type.longitude : null,
+        coordinates: type.type == 'polygon' ? type.coordinates : null,
+      };
+    });
 
     await client.insert({
       table: 'default.' + normalizedTableName,
-      values: [
-        {
-          code,
-          name,
-          level,
-          coordinates,
-        },
-      ],
+      values,
       format: 'JSONEachRow',
     })
 
@@ -269,6 +305,9 @@ export async function createOrganizationsTable(
       ( code String,
        name String,
        level String,
+       type String,
+       latitude Float32,
+       longitude Float32,
        coordinates Array(Array(Float32))
       )
       ENGINE = MergeTree
