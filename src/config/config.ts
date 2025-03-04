@@ -23,7 +23,7 @@ export const getConfig = () => {
     trustSelfSigned: process.env.TRUST_SELF_SIGNED === 'false' ? false : true,
     runningMode: process.env.MODE || '',
     bodySizeLimit: process.env.BODY_SIZE_LIMIT || '50mb',
-    chapApiUrl: process.env.CHAP_API_URL,
+    chapCliApiUrl: process.env.CHAP_CLI_API_URL,
     minio: {
       endPoint: process.env.MINIO_ENDPOINT || 'localhost',
       port: process.env.MINIO_PORT ? parseInt(process.env.MINIO_PORT) : 9000,

@@ -276,7 +276,7 @@ routes.post('/upload', async (req, res) => {
 
 async function getPrediction(trainingFileFormData: FormData, historicFutureFormData: FormData, bucket: string) {
   try {
-    const { chapApiUrl } = getConfig();
+    const { chapCliApiUrl: chapApiUrl } = getConfig();
     const { url, password } = getConfig().clickhouse;
     const client = createClient({
         url,
