@@ -41,31 +41,88 @@ export async function createTable(fields: string[], tableName: string) {
   return true;
 }
 
+/**
+ * Create a table within clickhouse from the inferred schema from the json file
+ * if table already exists within the clickhouse function will return false
+ * 
+ * @param s3Path URL location of the json within Minio
+ * @param s3Config Access key and Secrete key credentials to access Minio
+ * @param tableName The name of the table to be created within Minio
+ * @param groupByColumnName The column the created table will be ORDERED By within clickhouse
+ * @returns 
+ */
+
+export async function createTableFromJson(
+  s3Path: string,
+  s3Config: { accessKey: string; secretKey: string },
+  tableName: string,
+  groupByColumnName: string
+) {
+  const client = createClient({
+    url,
+    password,
+  });
+
+  const ping = await client.ping();
+
+  logger.info(`Clickhouse Ping: ${ping.success}`);
+
+  const normalizedTableName = tableName.replace(/-/g, '_');
+
+  try {
+    const existsResult = await client.query({
+      query: `desc ${normalizedTableName}`,
+    });
+    logger.debug(`Table ${normalizedTableName} already exists`);
+    await client.close();
+    return false;
+  } catch (error) {
+    logger.info(`Table ${normalizedTableName} does not exist`);
+  }
+
+  try {
+
+    logger.info(`Creating table from JSON ${normalizedTableName}`);
+
+    const query = generateDDLFromJson(s3Path, s3Config, normalizedTableName, groupByColumnName);
+    const res = await client.query({ query });
+
+    logger.info(`Successfully created table from JSON ${normalizedTableName}`);
+    logger.info(res);
+
+    await client.close();
+
+    return true;
+  } catch (err) {
+    logger.error(`Error creating table from JSON ${normalizedTableName}`);
+    logger.error(err);
+    return false;
+  }
+  
+}
+
 export function generateDDL(fields: string[], tableName: string) {
   return `CREATE TABLE ${tableName} (table_id UUID DEFAULT generateUUIDv4(),${fields.map((field) => `${field} VARCHAR`).join(', ')}) ENGINE = MergeTree ORDER BY (table_id)`;
 }
 
-export function flattenJson(json: any, prefix = ''): string[] {
-  const fields: string[] = [];
-  Object.keys(json).forEach((key) => {
-    const value = json[key];
-    if (typeof value === 'object') {
-      if (key === 'main') {
-        fields.push(...flattenJson(value));
-      } else {
-        // This is to avoid having a prefix starting with numbers
-        if (Array.isArray(json)) {
-          fields.push(...flattenJson(value, prefix));
-        } else {
-          fields.push(...flattenJson(value, `${key}_`));
-        }
-      }
-    } else {
-      fields.push(`${prefix}${key}`);
-    }
-  });
-  const fieldsSet = new Set(fields);
-  return Array.from(fieldsSet);
+export function generateDDLFromJson(
+  s3Path: string,
+  s3Config: { accessKey: string; secretKey: string },
+  tableName: string,
+  groupByColumnName: string
+) {
+  const query = `
+  CREATE TABLE IF NOT EXISTS \`default\`.${tableName}
+  ENGINE = MergeTree
+  ORDER BY ${groupByColumnName} EMPTY
+  AS SELECT * 
+  FROM s3('${s3Path}', '${s3Config.accessKey}', '${s3Config.secretKey}', JSONEachRow)
+  SETTINGS schema_inference_make_columns_nullable = 0
+  `;
+
+  logger.info(`Query: ${query}`);
+
+  return query;
 }
 
 export async function insertFromS3(
@@ -106,4 +163,180 @@ export async function insertFromS3(
   } finally {
     await client.close();
   }
+}
+
+export async function insertFromS3Json(
+  tableName: string,
+  s3Path: string,
+  s3Config: {
+    accessKey: string;
+    secretKey: string;
+  }
+) {
+  const client = createClient({
+    url,
+    password,
+  });
+
+  const normalizedTableName = tableName.replace(/-/g, '_');
+
+  try {
+    logger.debug(`Inserting data into ${normalizedTableName}`);
+    const query = `
+      INSERT INTO \`default\`.${normalizedTableName} 
+      SELECT * FROM s3(
+        '${s3Path}',
+        '${s3Config.accessKey}',
+        '${s3Config.secretKey}',
+        'JSONEachRow'
+      )
+    `;
+    await client.query({ query });
+    logger.info(`Successfully inserted data into ${normalizedTableName}`);
+    return true;
+  } catch (error) {
+    logger.error('Error inserting data from JSON');
+    logger.error(error);
+    return false;
+  } finally {
+    await client.close();
+  }
+}
+
+function isNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function checkType(feature: any):
+  {type: 'point', latitude: number, longitude: number} |
+  {type: 'polygon', coordinates: [[number, number]]}
+{
+  const type = feature?.geometry?.type?.toLowerCase();
+
+  if (type == 'point') {
+    if (Array.isArray(feature?.geometry?.coordinates) &&
+        feature.geometry.coordinates.every(isNumber)) {
+      return {
+        type: 'point',
+        latitude: feature.geometry.coordinates[0],
+        longitude: feature.geometry.coordinates[1],
+      };
+    }
+  }
+
+  if (type == 'polygon') {
+    if (Array.isArray(feature?.geometry?.coordinates?.[0]) &&
+        feature.geometry.coordinates?.[0].every(Array.isArray)) {
+      return {
+        type : 'polygon',
+        coordinates: feature.geometry.coordinates[0] as any,
+      };
+    }
+  }
+
+  throw new Error('Invalid geometry type. ' + JSON.stringify(feature));
+}
+
+export async function insertOrganizationIntoTable(
+  tableName: string,
+  payload: string,
+) {
+  const client = createClient({
+    url,
+    password,
+  });
+
+  const normalizedTableName = tableName.replace(/-/g, '_');
+
+  logger.info(`Inserting data into ${normalizedTableName}`);
+
+  try {
+    const json = JSON.parse(payload);
+
+    const values = json.orgUnitsGeoJson.features.map((feature: any) => {
+      const type = checkType(feature);
+
+      return {
+        code: feature.properties.code,
+        name: feature.properties.name,
+        level: feature.properties.level,
+        type: type.type,
+        latitude: type.type == 'point' ? type.latitude : null,
+        longitude: type.type == 'point' ? type.longitude : null,
+        coordinates: type.type == 'polygon' ? type.coordinates : null,
+      };
+    });
+
+    await client.insert({
+      table: 'default.' + normalizedTableName,
+      values,
+      format: 'JSONEachRow',
+    })
+
+    logger.info(`Successfully inserted data into ${normalizedTableName}`);
+    return true;
+  } catch (error) {
+    logger.error('Error inserting data from JSON');
+    logger.error(error);
+    return false;
+  } finally {
+    await client.close();
+  }
+}
+
+export async function createOrganizationsTable(
+  tableName: string,
+) {
+  const normalizedTableName = tableName.replace(/-/g, '_');
+
+  logger.info(`Creating Organizations table from JSON ${normalizedTableName}`);
+
+  const client = createClient({
+    url,
+    password,
+  });
+
+  //check if the table exists
+  try {
+    const existsResult = await client.query({
+      query: `desc ${normalizedTableName}`,
+    });
+    logger.info(`Table ${normalizedTableName} already exists`);
+    await client.close();
+    return false;
+  } catch (error) {
+  }
+
+  try {
+    
+    const query = `
+      CREATE TABLE IF NOT EXISTS \`default\`.${normalizedTableName}
+      ( code String,
+       name String,
+       level String,
+       type String,
+       latitude Float32,
+       longitude Float32,
+       coordinates Array(Array(Float32))
+      )
+      ENGINE = MergeTree
+      ORDER BY code
+    `;
+
+    logger.info(query);
+
+    const res = await client.query({ query });
+
+    logger.info(`Successfully created table from JSON ${normalizedTableName}`);
+    logger.info(res);
+
+    await client.close();
+
+    return true;
+  } catch (err) {
+    logger.error(`Error creating table from JSON ${normalizedTableName}`);
+    logger.error(err);
+    return false;
+  }
+  
 }

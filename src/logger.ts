@@ -1,7 +1,8 @@
 import { createLogger, format, transports } from 'winston';
+import { getConfig } from './config/config';
 
 const logger = createLogger({
-  level: 'info',
+  level: getConfig().logLevel,
   format: format.combine(
     format.colorize(),
     format.timestamp(),

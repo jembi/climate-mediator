@@ -103,7 +103,7 @@ export async function initializeBuckets(buckets: MinioBucketsRegistry[]) {
       logger.error(`Invalid bucket name ${bucket}, skipping`);
       invalidBuckets.push(bucket);
     } else {
-      await ensureBucketExists(bucket, region, true);
+      await ensureBucketExists(bucket, true);
       validBuckets.push(bucket);
     }
   }
@@ -200,7 +200,7 @@ async function putMediatorConfig(mediatorUrn: string, mediatorConfig: MinioBucke
   }
 }
 
-export async function registerBucket(bucket: string, region?: string) {
+export async function registerBucket(bucket: string) {
   // If we are in testing mode, we don't need to have the registered buckets persisted
   if (runningMode === 'testing') {
     logger.debug('Running in testing mode, skipping bucket registration');
@@ -210,8 +210,6 @@ export async function registerBucket(bucket: string, region?: string) {
   //get the mediator config from OpenHIM
   const mediatorConfig = await getMediatorConfig();
 
-  logger.debug(`Mediator config: ${JSON.stringify(mediatorConfig)}`);
-
   //if the mediator config is not found, log the issue and return false
   if (mediatorConfig === null) {
     logger.error('Mediator config not found in OpenHIM, unable to register bucket');
@@ -219,8 +217,7 @@ export async function registerBucket(bucket: string, region?: string) {
   }
 
   const newBucket = {
-    bucket,
-    region: region || '',
+    bucket
   };
 
   //get the existing buckets from the mediator config
