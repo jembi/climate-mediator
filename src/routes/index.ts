@@ -13,6 +13,9 @@ import {
   uploadToMinio,
 } from '../utils/minioClient';
 import { registerBucket } from '../openhim/openhim';
+import axios from 'axios';
+import FormData from 'form-data'
+import { createClient } from '@clickhouse/client';
 import { ModelPredictionUsingChap } from '../services/ModelPredictionUsingChap';
 import { createOrganizationsTable, insertOrganizationIntoTable } from '../utils/clickhouse';
 
@@ -70,31 +73,28 @@ const validateJsonFile = (buffer: Buffer): boolean => {
 
 // File handlers
 const handleCsvFile = async (
-  file: Express.Multer.File,
+  files: Express.Multer.File[],
   bucket: string,
-  region: string
 ): Promise<UploadResponse> => {
-  const headers = getCsvHeaders(file.buffer);
-  if (!headers) {
-    return createErrorResponse('INVALID_CSV_FORMAT', 'Invalid CSV file format');
-  }
-
-  const fileUrl = await saveToTmp(file.buffer, file.originalname);
   try {
-    const uploadResult = await uploadToMinio(
-      fileUrl,
-      file.originalname,
-      bucket,
-      file.mimetype
-    );
-    await fs.unlink(fileUrl);
+    for (const file of files) {
+      const fileUrl = await saveToTmp(file.buffer, file.originalname);
+      const uploadResult = await uploadToMinio(
+        fileUrl,
+        file.originalname,
+        bucket,
+        file.mimetype
+      );
+      await fs.unlink(fileUrl);
+      logger.debug(`Upload Successful: ${uploadResult.message}`);
+    }
 
-    return uploadResult.success
-      ? createSuccessResponse('UPLOAD_SUCCESS', uploadResult.message)
-      : createErrorResponse('UPLOAD_FAILED', uploadResult.message);
+    return createSuccessResponse(
+      'SUCCESSFULLY_UPLOADED_FILES',
+      'All files uploaded successfully'
+    );
   } catch (error) {
-    logger.error('Error uploading file to Minio:', error);
-    throw error;
+    return createErrorResponse('FAILED_TO_UPLOAD_FILES', 'There was an issue uploading files');
   }
 };
 
@@ -156,66 +156,176 @@ const handleJsonPayload = async (file: Express.Multer.File, json: Object, bucket
 };
 
 // Main route handler
-routes.post('/upload', upload.single('file'), async (req, res) => {
-  try {
-    const file = req.file;
-    const bucket = req.query.bucket as string;
-    const region = req.query.region as string;
-    const createBucketIfNotExists = req.query.createBucketIfNotExists === 'true';
 
-    if (!file) {
-      logger.error('No file uploaded');
-      return res.status(400).json(createErrorResponse('FILE_MISSING', 'No file uploaded'));
-    }
+//TODO: What is the behavior if multiple files of the same name are uploaded?
+routes.post('/upload', async (req, res) => {
+  const handleUpload = upload.fields([
+    { name: 'training', maxCount: 1 },
+    { name: 'historic', maxCount: 1 },
+    { name: 'future', maxCount: 1 },
+  ]);
 
-    if (!bucket) {
-      logger.error('No bucket provided');
-      return res.status(400).json(createErrorResponse('BUCKET_MISSING', 'No bucket provided'));
-    }
+  handleUpload(req, res, async (err) => {
+    const error = err as multer.MulterError;
 
-    if (!validateBucketName(bucket)) {
-      logger.error(`Invalid bucket name ${bucket}`);
+    // handle error if they exceed the max count
+    if (error !== undefined && error.code === 'LIMIT_FILE_COUNT') {
+      logger.error(`Error uploading files: ${err}`);
       return res
-        .status(400)
+        .status(500)
         .json(
           createErrorResponse(
-            'INVALID_BUCKET_NAME',
-            'Bucket names must be between 3 (min) and 63 (max) characters long. Can consist only of lowercase letters, numbers, dots (.), and hyphens (-). Must not start with the prefix xn--. Must not end with the suffix -s3alias. This suffix is reserved for access point alias names.'
+            'UPLOAD_FAILED',
+            'Unexpected Field Provided When Uploading Files'
           )
         );
     }
 
-    await ensureBucketExists(bucket, region, createBucketIfNotExists);
-
-    const response =
-      file.mimetype === 'text/csv'
-        ? await handleCsvFile(file, bucket, region)
-        : await handleJsonFile(file, bucket, region);
-
-    if (createBucketIfNotExists && getConfig().runningMode !== 'testing') {
-      await registerBucket(bucket, region);
+    // handle error if unknown file is provided
+    if (error !== undefined && error.code === 'LIMIT_UNEXPECTED_FILE') {
+      logger.error(`Error uploading files: ${err}`);
+      return res
+        .status(500)
+        .json(
+          createErrorResponse(
+            'UPLOAD_FAILED',
+            'Unexpected Field Provided When Uploading Files'
+          )
+        );
     }
 
-    const statusCode = response.status === 'success' ? 201 : 400;
-    return res.status(statusCode).json(response);
-  } catch (e) {
-    logger.error('Error processing upload:', e);
+    try {
+      //@ts-ignore
+      const trainingFile = req.files?.training?.[0] as Express.Multer.File;
+      //@ts-ignore
+      const historicFile = req.files?.historic?.[0] as Express.Multer.File;
+      //@ts-ignore
+      const futureFile = req.files?.future?.[0] as Express.Multer.File;
 
-    if (e instanceof BucketDoesNotExistError) {
-      const error = e as BucketDoesNotExistError;
-      return res.status(400).json(createErrorResponse('BUCKET_DOES_NOT_EXIST', error.message));
+      if (!trainingFile || !historicFile || !futureFile) {
+        logger.error('Missing files');
+        return res.status(400).json(createErrorResponse('FILE_MISSING', 'Missing files'));
+      }
+
+      const bucket = req.query.bucket as string;
+      const createBucketIfNotExists = req.query.createBucketIfNotExists === 'true';
+
+      if (!bucket) {
+        logger.error('No bucket provided');
+        return res
+          .status(400)
+          .json(createErrorResponse('BUCKET_MISSING', 'No bucket provided'));
+      }
+
+      if (!validateBucketName(bucket)) {
+        logger.error(`Invalid bucket name ${bucket}`);
+        return res
+          .status(400)
+          .json(
+            createErrorResponse(
+              'INVALID_BUCKET_NAME',
+              'Bucket names must be between 3 (min) and 63 (max) characters long. Can consist only of lowercase letters, numbers, dots (.), and hyphens (-). Must not start with the prefix xn--. Must not end with the suffix -s3alias. This suffix is reserved for access point alias names.'
+            )
+          );
+      }
+
+      const trainingFileFormData = new FormData();
+      trainingFileFormData.append('training_data', trainingFile.buffer, {
+        filename: trainingFile.originalname,
+        contentType: trainingFile.mimetype,
+      });
+      const historicFutureFormData = new FormData();
+      historicFutureFormData.append('historic_data', historicFile.buffer, {
+        filename: historicFile.originalname,
+        contentType: historicFile.mimetype,
+      });
+      historicFutureFormData.append('future_data', futureFile.buffer, {
+        filename: futureFile.originalname,
+        contentType: futureFile.mimetype,
+      });
+
+      await ensureBucketExists(bucket, createBucketIfNotExists);
+      getPrediction(trainingFileFormData, historicFutureFormData, bucket);
+
+      
+
+      if (createBucketIfNotExists && getConfig().runningMode !== 'testing') {
+        await registerBucket(bucket);
+      }
+
+      let response: UploadResponse;
+      if (trainingFile.mimetype === 'text/csv') {
+        response = await handleCsvFile(
+          [trainingFile, historicFile, futureFile],
+          bucket
+        );
+      } else {
+        response = createErrorResponse('INVALID_FILE_TYPE', 'Invalid file type');
+      }
+
+      const statusCode = response.status === 'success' ? 201 : 400;
+      return res.status(statusCode).json(response);
+    } catch (e) {
+      logger.error('Error processing upload:', JSON.stringify(e));
+      if (e instanceof BucketDoesNotExistError) {
+        const error = e as BucketDoesNotExistError;
+        return res
+          .status(400)
+          .json(createErrorResponse('BUCKET_DOES_NOT_EXIST', error.message));
+      }
+      return res
+        .status(500)
+        .json(
+          createErrorResponse(
+            'INTERNAL_SERVER_ERROR',
+            e instanceof Error ? e.message : 'Unknown error'
+          )
+        );
     }
-
-    return res
-      .status(500)
-      .json(
-        createErrorResponse(
-          'INTERNAL_SERVER_ERROR',
-          e instanceof Error ? e.message : 'Unknown error'
-        )
-      );
-  }
+  });
 });
+
+async function getPrediction(trainingFileFormData: FormData, historicFutureFormData: FormData, bucket: string) {
+  try {
+    const { chapCliApiUrl: chapApiUrl } = getConfig();
+    const { url, password } = getConfig().clickhouse;
+    const client = createClient({
+        url,
+        password,
+      });
+
+    const  trainingResults = await axios.post(chapApiUrl + '/train', trainingFileFormData, {
+      headers: {
+        ...trainingFileFormData.getHeaders()
+      },
+    })
+
+    logger.debug(`CHAP Training Results: ${trainingResults.status === 201 ? 'Upload Successful':'Upload Failed'}`)
+
+    const prediction = await axios.post(chapApiUrl + '/predict', historicFutureFormData, {
+      headers: {
+        ...historicFutureFormData.getHeaders()
+      },
+    })
+    
+    logger.debug(`CHAP Prediction Results: ${prediction.status === 201 ? 'Successful Received Prediction':'Failed to Received Prediction'}`);
+    const { predictions } = prediction.data
+    const stringifiedPrediction = JSON.stringify(predictions);
+    const originalFileName = `prediction-result.json`;
+    const fileUrl = await saveToTmp(Buffer.from(stringifiedPrediction), originalFileName);
+
+    await uploadToMinio(
+      fileUrl,
+      originalFileName,
+      bucket,
+      'application/json'
+    );
+    await fs.unlink(fileUrl);
+
+  } catch (error) {
+    logger.error(`Failed to receive prediction: ${error}`);
+  }
+}
 
 routes.post('/predict', upload.single('file'), async (req, res) => {
   try {
@@ -265,7 +375,7 @@ routes.post('/predict', upload.single('file'), async (req, res) => {
         }
       });
 
-      await ensureBucketExists(bucketName, region, true);
+      await ensureBucketExists(bucketName, true);
 
       await handleJsonPayload(file, predictionResultsForMinio, bucketName);
 

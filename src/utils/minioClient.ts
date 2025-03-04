@@ -73,15 +73,14 @@ function getFirstField(json: any) {
  */
 export async function ensureBucketExists(
   bucket: string,
-  region?: string,
   createBucketIfNotExists = false
 ): Promise<void> {
   try {
     const exists = await minioClient.bucketExists(bucket);
     if (!exists && createBucketIfNotExists) {
-      await minioClient.makeBucket(bucket, region);
+      await minioClient.makeBucket(bucket);
       logger.info(
-        `Bucket ${bucket} created${region ? `in "${region}"` : ' no region specified'}`
+        `Bucket ${bucket} created`
       );
     }
 
@@ -166,15 +165,6 @@ export async function uploadToMinio(
   try {
     logger.info(`Uploading file ${sourceFile} to bucket ${bucket}`);
 
-    const fileCheck = await checkFileExists(destinationObject, bucket, fileType);
-
-    if (fileCheck.exists) {
-      return {
-        success: false,
-        message: fileCheck.message,
-      };
-    }
-
     const metaData = {
       'Content-Type': fileType,
       'X-Upload-Id': crypto.randomUUID(),
@@ -192,10 +182,7 @@ export async function uploadToMinio(
   } catch (error) {
     const errorMessage = `Error uploading file: ${error instanceof Error ? error.message : String(error)}`;
     logger.error(errorMessage);
-    return {
-      success: false,
-      message: errorMessage,
-    };
+    throw new Error(`Filed to upload file ${sourceFile}`);
   }
 }
 
@@ -271,7 +258,7 @@ export async function createMinioBucketListeners(listOfBuckets: string[]) {
       const file = notification.s3.object.key;
 
       //@ts-ignore
-      const tableName = notification.s3.bucket.name;
+      const tableName = notification.s3.bucket.name + '_predictions';
 
       logger.info(`File received: ${file} from bucket ${tableName}`);
 
@@ -284,16 +271,15 @@ export async function createMinioBucketListeners(listOfBuckets: string[]) {
         const extension = file.split('.').pop();
         logger.info(`File Downloaded - Type: ${extension}`);
 
+        const minioUrl = `http://${endPoint}:${port}/${bucket}/${file}`;
+
         if (extension === 'json' && validateJsonFile(fileBuffer)) {
-          logger.info('File is a valid json file');
+          logger.debug('Now inserting ' + file + 'into clickhouse');
 
-          // Construct the S3-style URL for the file
-          const minioUrl = `http://${endPoint}:${port}/${bucket}/${file}`;
-
-          const key = getFirstField(JSON.parse(fileBuffer.toString()));
+          const groupByColumnName = getFirstField(JSON.parse(fileBuffer.toString()));
 
           // Create table from json
-          await createTableFromJson(minioUrl, { accessKey, secretKey }, tableName, key);
+          await createTableFromJson(minioUrl, { accessKey, secretKey }, tableName, groupByColumnName);
 
           // Insert data into clickhouse
           await insertFromS3Json(tableName, minioUrl, {
@@ -302,20 +288,20 @@ export async function createMinioBucketListeners(listOfBuckets: string[]) {
           });
         } else if (extension === 'csv' && getCsvHeaders(fileBuffer)) {
           //get the first line of the csv file
-          const fields = (await readFile(`tmp/${file}`, 'utf8')).split('\n')[0].split(',');
+          // const fields = (await readFile(`tmp/${file}`, 'utf8')).split('\n')[0].split(',');
 
-          await createTable(fields, tableName);
+          // await createTable(fields, tableName);
 
-          // If running locally and using docker compose, the minio host is 'minio'. This is to allow clickhouse to connect to the minio server
+          // // If running locally and using docker compose, the minio host is 'minio'. This is to allow clickhouse to connect to the minio server
 
-          // Construct the S3-style URL for the file
-          const minioUrl = `http://${endPoint}:${port}/${bucket}/${file}`;
+          // // Construct the S3-style URL for the file
+          
 
-          // Insert data into clickhouse
-          await insertFromS3(tableName, minioUrl, {
-            accessKey,
-            secretKey,
-          });
+          // // Insert data into clickhouse
+          // await insertFromS3(tableName, minioUrl, {
+          //   accessKey,
+          //   secretKey,
+          // });
         } else {
           logger.warn(`Unknown file type - ${extension}`);
         }
