@@ -14,6 +14,7 @@ import {
 } from '../utils/minioClient';
 import { registerBucket } from '../openhim/openhim';
 import { ModelPredictionUsingChap } from '../services/ModelPredictionUsingChap';
+import { createOrganizationsTable, insertOrganizationIntoTable } from '../utils/clickhouse';
 
 // Constants
 const VALID_MIME_TYPES = ['text/csv', 'application/json'] as const;
@@ -134,6 +135,12 @@ const handleJsonPayload = async (file: Express.Multer.File, json: Object, bucket
       bucket,
       file.mimetype
     );
+
+    const tableNameOrganizations  = (new Date().getTime()) + '_organizations';
+
+    await createOrganizationsTable(tableNameOrganizations);
+    
+    await insertOrganizationIntoTable(tableNameOrganizations, file.buffer.toString());
    
     return uploadResult.success
       ? createSuccessResponse('UPLOAD_SUCCESS', uploadResult.message)

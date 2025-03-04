@@ -193,3 +193,98 @@ export async function insertFromS3Json(
     await client.close();
   }
 }
+
+export async function insertOrganizationIntoTable(
+  tableName: string,
+  payload: string,
+) {
+  const client = createClient({
+    url,
+    password,
+  });
+
+  const normalizedTableName = tableName.replace(/-/g, '_');
+
+  logger.info(`Inserting data into ${normalizedTableName}`);
+
+  try {
+    const json = JSON.parse(payload);
+
+    const code = json.orgUnitsGeoJson.features[0].properties.code;
+    const name = json.orgUnitsGeoJson.features[0].properties.name;
+    const level = json.orgUnitsGeoJson.features[0].properties.level;
+    const coordinates = json.orgUnitsGeoJson.features[0].geometry.coordinates[0];
+    
+    const encodedCoordinates = JSON.stringify(coordinates)
+
+    const query = `
+      INSERT INTO \`default\`.\`${normalizedTableName}\`
+      (code, name, level, coordinates)
+      VALUES ('${code}', '${name}', '${level}', ${encodedCoordinates})
+    `;
+
+    logger.info(query);
+
+    await client.query({ query });
+    logger.info(`Successfully inserted data into ${normalizedTableName}`);
+    return true;
+  } catch (error) {
+    logger.error('Error inserting data from JSON');
+    logger.error(error);
+    return false;
+  } finally {
+    await client.close();
+  }
+}
+
+export async function createOrganizationsTable(
+  tableName: string,
+) {
+  const normalizedTableName = tableName.replace(/-/g, '_');
+
+  logger.info(`Creating Organizations table from JSON ${normalizedTableName}`);
+
+  const client = createClient({
+    url,
+    password,
+  });
+
+  //check if the table exists
+  try {
+    const existsResult = await client.query({
+      query: `desc ${normalizedTableName}`,
+    });
+    logger.info(`Table ${normalizedTableName} already exists`);
+    await client.close();
+    return false;
+  } catch (error) {
+  }
+
+  try {
+
+    const query = `
+      CREATE TABLE IF NOT EXISTS \`default\`.${normalizedTableName}
+      ( code String,
+       name String,
+       level String,
+       coordinates Array(Array(Float64))
+      )
+      ENGINE = MergeTree
+      ORDER BY code
+    `;
+
+    const res = await client.query({ query });
+
+    logger.info(`Successfully created table from JSON ${normalizedTableName}`);
+    logger.info(res);
+
+    await client.close();
+
+    return true;
+  } catch (err) {
+    logger.error(`Error creating table from JSON ${normalizedTableName}`);
+    logger.error(err);
+    return false;
+  }
+  
+}
