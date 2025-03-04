@@ -209,8 +209,8 @@ export async function insertFromS3Json(
 
 export async function createHistoricalDiseaseTable() {
   const client = createClient({
-    url: 'http://localhost:8123',
-    password: 'dev_password_only',
+    url,
+    password,
   });
 
   try {
@@ -222,7 +222,7 @@ export async function createHistoricalDiseaseTable() {
                     period String,
                     value Int64
                 ) ENGINE = MergeTree()
-                ORDER BY (ou)
+                ORDER BY (organizational_unit)
             `,
     });
     logger.debug('Table created successfully');
@@ -236,8 +236,8 @@ export async function insertHistoricDiseaseData(
   diseaseData: HistoricData[]
 ) {
   const client = createClient({
-    url: 'http://localhost:8123',
-    password: 'dev_password_only',
+    url,
+    password,
   });
 
   try {

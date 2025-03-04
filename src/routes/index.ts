@@ -21,7 +21,7 @@ import axios from 'axios';
 import FormData from 'form-data';
 import { createClient } from '@clickhouse/client';
 import { ModelPredictionUsingChap } from '../services/ModelPredictionUsingChap';
-import { createHistoricalDiseaseTable, insertHistoricDiseaseData } from '../utils/clickhouse';
+import { insertHistoricDiseaseData } from '../utils/clickhouse';
 import { createOrganizationsTable, insertOrganizationIntoTable } from '../utils/clickhouse';
 
 // Constants
@@ -346,7 +346,6 @@ routes.post('/predict', upload.single('file'), async (req, res) => {
 
     try {
       const historicData = extractHistoricData(file.buffer.toString());
-      await createHistoricalDiseaseTable();
       await insertHistoricDiseaseData(historicData);
     } catch (error) {
       logger.error('There was an issue inserting the Historic Data: ' + JSON.stringify(error));
