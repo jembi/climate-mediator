@@ -4,10 +4,12 @@ import * as Minio from 'minio';
 import { getConfig } from '../config/config';
 import logger from '../logger';
 import {
+  createOrganizationsTable,
   createTable,
   createTableFromJson,
   insertFromS3,
   insertFromS3Json,
+  insertOrganizationIntoTable,
 } from './clickhouse';
 import { getCsvHeaders, validateJsonFile } from './file-validators';
 

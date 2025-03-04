@@ -253,3 +253,140 @@ export async function insertHistoricDiseaseData(
   }
   return client.close();
 }
+function isNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function checkType(feature: any):
+  {type: 'point', latitude: number, longitude: number} |
+  {type: 'polygon', coordinates: [[number, number]]}
+{
+  const type = feature?.geometry?.type?.toLowerCase();
+
+  if (type == 'point') {
+    if (Array.isArray(feature?.geometry?.coordinates) &&
+        feature.geometry.coordinates.every(isNumber)) {
+      return {
+        type: 'point',
+        latitude: feature.geometry.coordinates[0],
+        longitude: feature.geometry.coordinates[1],
+      };
+    }
+  }
+
+  if (type == 'polygon') {
+    if (Array.isArray(feature?.geometry?.coordinates?.[0]) &&
+        feature.geometry.coordinates?.[0].every(Array.isArray)) {
+      return {
+        type : 'polygon',
+        coordinates: feature.geometry.coordinates[0] as any,
+      };
+    }
+  }
+
+  throw new Error('Invalid geometry type. ' + JSON.stringify(feature));
+}
+
+export async function insertOrganizationIntoTable(
+  tableName: string,
+  payload: string,
+) {
+  const client = createClient({
+    url,
+    password,
+  });
+
+  const normalizedTableName = tableName.replace(/-/g, '_');
+
+  logger.info(`Inserting data into ${normalizedTableName}`);
+
+  try {
+    const json = JSON.parse(payload);
+
+    const values = json.orgUnitsGeoJson.features.map((feature: any) => {
+      const type = checkType(feature);
+
+      return {
+        code: feature.properties.code,
+        name: feature.properties.name,
+        level: feature.properties.level,
+        type: type.type,
+        latitude: type.type == 'point' ? type.latitude : null,
+        longitude: type.type == 'point' ? type.longitude : null,
+        coordinates: type.type == 'polygon' ? type.coordinates : null,
+      };
+    });
+
+    await client.insert({
+      table: 'default.' + normalizedTableName,
+      values,
+      format: 'JSONEachRow',
+    })
+
+    logger.info(`Successfully inserted data into ${normalizedTableName}`);
+    return true;
+  } catch (error) {
+    logger.error('Error inserting data from JSON');
+    logger.error(error);
+    return false;
+  } finally {
+    await client.close();
+  }
+}
+
+export async function createOrganizationsTable(
+  tableName: string,
+) {
+  const normalizedTableName = tableName.replace(/-/g, '_');
+
+  logger.info(`Creating Organizations table from JSON ${normalizedTableName}`);
+
+  const client = createClient({
+    url,
+    password,
+  });
+
+  //check if the table exists
+  try {
+    const existsResult = await client.query({
+      query: `desc ${normalizedTableName}`,
+    });
+    logger.info(`Table ${normalizedTableName} already exists`);
+    await client.close();
+    return false;
+  } catch (error) {
+  }
+
+  try {
+    
+    const query = `
+      CREATE TABLE IF NOT EXISTS \`default\`.${normalizedTableName}
+      ( code String,
+       name String,
+       level String,
+       type String,
+       latitude Float32,
+       longitude Float32,
+       coordinates Array(Array(Float32))
+      )
+      ENGINE = MergeTree
+      ORDER BY code
+    `;
+
+    logger.info(query);
+
+    const res = await client.query({ query });
+
+    logger.info(`Successfully created table from JSON ${normalizedTableName}`);
+    logger.info(res);
+
+    await client.close();
+
+    return true;
+  } catch (err) {
+    logger.error(`Error creating table from JSON ${normalizedTableName}`);
+    logger.error(err);
+    return false;
+  }
+  
+}
