@@ -225,7 +225,7 @@ function checkType(feature: any):
     }
   }
 
-  throw new Error('Invalid geometry type', {cause: feature});
+  throw new Error('Invalid geometry type. ' + JSON.stringify(feature));
 }
 
 export async function insertOrganizationIntoTable(
