@@ -7,7 +7,9 @@ import fs from 'fs/promises';
 import path from 'path';
 import {
   BucketDoesNotExistError,
+  downloadFileAndUpload,
   ensureBucketExists,
+  minioListenerHandler,
   sanitizeBucketName,
   uploadFileBufferToMinio,
   uploadToMinio,
@@ -387,6 +389,48 @@ routes.post('/predict', upload.single('file'), async (req, res) => {
     logger.error('Error predicting model:');
     logger.error(err);
     return res.status(500).json({ error: 'An unexpected error has occured' });
+  }
+});
+
+routes.get('/process-climate-data', async (req, res) => {
+  try {
+    const bucket = req.query.bucket as string;
+    const file = req.query.file as string;
+    const tableName = req.query.tableName as string;
+
+    await minioListenerHandler(bucket, file, tableName);
+
+    return res.status(200).json({bucket, file, tableName, clickhouseInsert: 'Success'});
+  } catch (e) {
+    return res
+      .status(500)
+      .json(
+        createErrorResponse(
+          'INTERNAL_SERVER_ERROR',
+          e instanceof Error ? e.message : 'Unknown error'
+        )
+      );
+  }
+});
+
+routes.get('/download-climate-data', async (req, res) => {
+  try {
+    logger.info('Downloading and uploading of climate data started');
+
+    const bucket = req.query.bucket;
+
+    await downloadFileAndUpload(bucket as string);
+
+    return res.status(200).json({download: 'success', upload: 'success'});
+  } catch (e) {
+    return res
+      .status(500)
+      .json(
+        createErrorResponse(
+          'INTERNAL_SERVER_ERROR',
+          e instanceof Error ? e.message : 'Unknown error'
+        )
+      );
   }
 });
 

@@ -1,6 +1,6 @@
 {
   "urn": "urn:mediator:climate-mediator",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "name": "Climate Mediator",
   "description": "Processes climate-related data as an example of unstructured data handling",
   "defaultChannelConfig": [
@@ -46,7 +46,17 @@
       "template": [
         {
           "param": "bucket",
-          "displayName": "Bucket",
+          "displayName": "Bucket name",
+          "type": "string"
+        },
+        {
+          "param": "fileName",
+          "displayName": "File name (with .ext csv or json)",
+          "type": "string"
+        },
+        {
+          "param": "url",
+          "displayName": "File download url",
           "type": "string"
         },
         {

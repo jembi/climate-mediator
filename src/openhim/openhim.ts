@@ -9,8 +9,15 @@ import { Bucket, createMinioBucketListeners, ensureBucketExists } from '../utils
 import path from 'path';
 import { validateBucketName } from '../utils/file-validators';
 
-const { openhimUsername, openhimPassword, openhimMediatorUrl, trustSelfSigned, runningMode } =
-  getConfig();
+const {
+  openhimUsername,
+  openhimPassword,
+  openhimMediatorUrl,
+  trustSelfSigned,
+  runningMode,
+  openhimTransactionUrl,
+  openhimClientToken
+} = getConfig();
 
 const mediatorConfigFilePath = path.resolve(__dirname, './mediatorConfig.json');
 
@@ -65,6 +72,7 @@ export const setupMediator = async () => {
 
         emitter.on('config', async (config: any) => {
           logger.debug('Received new configs from OpenHIM');
+          Config = config.minio_buckets_registry;
           await initializeBuckets(config.minio_buckets_registry);
         });
       });
@@ -73,6 +81,9 @@ export const setupMediator = async () => {
     logger.error('Unable to register mediator', err);
   }
 };
+
+let Config: any
+export const getOpenhimConfig = () => Config;
 
 /**
  * Initializes the buckets based on the values in the mediator config
@@ -146,6 +157,18 @@ export async function getMediatorConfig(): Promise<MediatorConfig | null> {
     }
     return null;
   }
+}
+
+// Triggers the processing of the climate data onces its received on the minio bucket
+export async function triggerProcessing (bucket: string, file: string, tableName: string) {
+  await axios({
+    url: `${openhimTransactionUrl}/process-climate-data`,
+    method: 'GET',
+    params: {bucket, file, tableName},
+    headers: {
+      Authorization: `Custom ${openhimClientToken}`
+    },
+  })
 }
 
 async function putMediatorConfig(mediatorUrn: string, mediatorConfig: MinioBucketsRegistry[]) {
