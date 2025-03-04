@@ -31,3 +31,16 @@ export function validateBucketName(bucket: string): boolean {
   const regex = new RegExp(/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/);
   return regex.test(bucket);
 }
+
+export function extractHistoricData(jsonStringified: string): { ou: string; pe: string; value: number }[]{
+  const jsonPayload = JSON.parse(jsonStringified);
+  //@ts-ignore
+  const diseaseCases = jsonPayload.features.find(feature => feature['featureId'] === 'disease_cases')
+  
+  if(diseaseCases === undefined){
+    throw new Error("Could not find historic disease data within payload");
+  }
+
+  const {data} = diseaseCases;
+  return data;
+}
