@@ -1,3 +1,5 @@
+import { PredictionPayload } from "./prediction-payload";
+
 export interface HistoricData{
   organizational_unit: string;
   period: string;
@@ -39,8 +41,7 @@ export function validateBucketName(bucket: string): boolean {
 }
 
 export function extractHistoricData(jsonStringified: string): HistoricData[]{
-  const jsonPayload = JSON.parse(jsonStringified);
-  //@ts-ignore
+  const jsonPayload = JSON.parse(jsonStringified) as PredictionPayload;
   const diseaseCases = jsonPayload.features.find(feature => feature['featureId'] === 'disease_cases')
   
   if(diseaseCases === undefined){
