@@ -268,8 +268,8 @@ function checkType(feature: any):
         feature.geometry.coordinates.every(isNumber)) {
       return {
         type: 'point',
-        latitude: feature.geometry.coordinates[0],
-        longitude: feature.geometry.coordinates[1],
+        latitude: feature.geometry.coordinates[1],
+        longitude: feature.geometry.coordinates[0],
       };
     }
   }
