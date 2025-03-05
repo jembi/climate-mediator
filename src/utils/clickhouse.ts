@@ -1,6 +1,7 @@
 import { createClient } from '@clickhouse/client';
 import { getConfig } from '../config/config';
 import logger from '../logger';
+import { HistoricData } from './file-validators';
 
 const { clickhouse } = getConfig();
 const { url, password } = clickhouse;
@@ -44,12 +45,12 @@ export async function createTable(fields: string[], tableName: string) {
 /**
  * Create a table within clickhouse from the inferred schema from the json file
  * if table already exists within the clickhouse function will return false
- * 
+ *
  * @param s3Path URL location of the json within Minio
  * @param s3Config Access key and Secrete key credentials to access Minio
  * @param tableName The name of the table to be created within Minio
  * @param groupByColumnName The column the created table will be ORDERED By within clickhouse
- * @returns 
+ * @returns
  */
 
 export async function createTableFromJson(
@@ -81,10 +82,14 @@ export async function createTableFromJson(
   }
 
   try {
-
     logger.info(`Creating table from JSON ${normalizedTableName}`);
 
-    const query = generateDDLFromJson(s3Path, s3Config, normalizedTableName, groupByColumnName);
+    const query = generateDDLFromJson(
+      s3Path,
+      s3Config,
+      normalizedTableName,
+      groupByColumnName
+    );
     const res = await client.query({ query });
 
     logger.info(`Successfully created table from JSON ${normalizedTableName}`);
@@ -98,7 +103,6 @@ export async function createTableFromJson(
     logger.error(err);
     return false;
   }
-  
 }
 
 export function generateDDL(fields: string[], tableName: string) {
@@ -203,6 +207,52 @@ export async function insertFromS3Json(
   }
 }
 
+export async function createHistoricalDiseaseTable() {
+  const client = createClient({
+    url,
+    password,
+  });
+
+  try {
+    logger.debug('Now creating table');
+    await client.query({
+      query: `
+                CREATE TABLE IF NOT EXISTS historical_disease (
+                    organizational_unit String,
+                    period String,
+                    value Int64
+                ) ENGINE = MergeTree()
+                ORDER BY (organizational_unit)
+            `,
+    });
+    logger.debug('Table created successfully');
+  } catch (error) {
+    logger.error("There was an issue creating the table in clickhouse: " + JSON.stringify(error));
+  }
+  return client.close();
+}
+
+export async function insertHistoricDiseaseData(
+  diseaseData: HistoricData[]
+) {
+  const client = createClient({
+    url,
+    password,
+  });
+
+  try {
+    logger.debug('Now inserting data');
+    await client.insert({
+      table: 'historical_disease',
+      values: diseaseData,
+      format: 'JSONEachRow',
+    });
+    logger.debug('Insertion successful');
+  } catch (error) {
+    logger.error('There was an issue inserting the data into clickhouse: ' + JSON.stringify(error));
+  }
+  return client.close();
+}
 function isNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }

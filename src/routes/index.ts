@@ -1,7 +1,11 @@
 import express from 'express';
 import multer from 'multer';
 import { getConfig } from '../config/config';
-import { getCsvHeaders, validateBucketName } from '../utils/file-validators';
+import {
+  extractHistoricData,
+  getCsvHeaders,
+  validateBucketName,
+} from '../utils/file-validators';
 import logger from '../logger';
 import fs from 'fs/promises';
 import path from 'path';
@@ -16,9 +20,10 @@ import {
 } from '../utils/minioClient';
 import { registerBucket } from '../openhim/openhim';
 import axios from 'axios';
-import FormData from 'form-data'
+import FormData from 'form-data';
 import { createClient } from '@clickhouse/client';
 import { ModelPredictionUsingChap } from '../services/ModelPredictionUsingChap';
+import { insertHistoricDiseaseData } from '../utils/clickhouse';
 import { createOrganizationsTable, insertOrganizationIntoTable } from '../utils/clickhouse';
 
 // Constants
@@ -76,7 +81,7 @@ const validateJsonFile = (buffer: Buffer): boolean => {
 // File handlers
 const handleCsvFile = async (
   files: Express.Multer.File[],
-  bucket: string,
+  bucket: string
 ): Promise<UploadResponse> => {
   try {
     for (const file of files) {
@@ -103,7 +108,7 @@ const handleCsvFile = async (
 const handleJsonFile = async (
   file: Express.Multer.File,
   bucket: string,
-  region: string,
+  region: string
 ): Promise<UploadResponse> => {
   if (!validateJsonFile(file.buffer)) {
     return createErrorResponse('INVALID_JSON_FORMAT', 'Invalid JSON file format');
@@ -128,7 +133,6 @@ const handleJsonFile = async (
     throw error;
   }
 };
-
 function sanitizeTableName(tableName: string): string {
   return tableName.replace(/[^a-zA-Z0-9_-]/g, '_');
 }
@@ -249,18 +253,13 @@ routes.post('/upload', async (req, res) => {
       await ensureBucketExists(bucket, createBucketIfNotExists);
       getPrediction(trainingFileFormData, historicFutureFormData, bucket);
 
-      
-
       if (createBucketIfNotExists && getConfig().runningMode !== 'testing') {
         await registerBucket(bucket);
       }
 
       let response: UploadResponse;
       if (trainingFile.mimetype === 'text/csv') {
-        response = await handleCsvFile(
-          [trainingFile, historicFile, futureFile],
-          bucket
-        );
+        response = await handleCsvFile([trainingFile, historicFile, futureFile], bucket);
       } else {
         response = createErrorResponse('INVALID_FILE_TYPE', 'Invalid file type');
       }
@@ -287,43 +286,45 @@ routes.post('/upload', async (req, res) => {
   });
 });
 
-async function getPrediction(trainingFileFormData: FormData, historicFutureFormData: FormData, bucket: string) {
+async function getPrediction(
+  trainingFileFormData: FormData,
+  historicFutureFormData: FormData,
+  bucket: string
+) {
   try {
     const { chapCliApiUrl: chapApiUrl } = getConfig();
     const { url, password } = getConfig().clickhouse;
     const client = createClient({
-        url,
-        password,
-      });
+      url,
+      password,
+    });
 
-    const  trainingResults = await axios.post(chapApiUrl + '/train', trainingFileFormData, {
+    const trainingResults = await axios.post(chapApiUrl + '/train', trainingFileFormData, {
       headers: {
-        ...trainingFileFormData.getHeaders()
+        ...trainingFileFormData.getHeaders(),
       },
-    })
+    });
 
-    logger.debug(`CHAP Training Results: ${trainingResults.status === 201 ? 'Upload Successful':'Upload Failed'}`)
+    logger.debug(
+      `CHAP Training Results: ${trainingResults.status === 201 ? 'Upload Successful' : 'Upload Failed'}`
+    );
 
     const prediction = await axios.post(chapApiUrl + '/predict', historicFutureFormData, {
       headers: {
-        ...historicFutureFormData.getHeaders()
+        ...historicFutureFormData.getHeaders(),
       },
-    })
-    
-    logger.debug(`CHAP Prediction Results: ${prediction.status === 201 ? 'Successful Received Prediction':'Failed to Received Prediction'}`);
-    const { predictions } = prediction.data
+    });
+
+    logger.debug(
+      `CHAP Prediction Results: ${prediction.status === 201 ? 'Successful Received Prediction' : 'Failed to Received Prediction'}`
+    );
+    const { predictions } = prediction.data;
     const stringifiedPrediction = JSON.stringify(predictions);
     const originalFileName = `prediction-result.json`;
     const fileUrl = await saveToTmp(Buffer.from(stringifiedPrediction), originalFileName);
 
-    await uploadToMinio(
-      fileUrl,
-      originalFileName,
-      bucket,
-      'application/json'
-    );
+    await uploadToMinio(fileUrl, originalFileName, bucket, 'application/json');
     await fs.unlink(fileUrl);
-
   } catch (error) {
     logger.error(`Failed to receive prediction: ${error}`);
   }
@@ -332,8 +333,8 @@ async function getPrediction(trainingFileFormData: FormData, historicFutureFormD
 routes.post('/predict', upload.single('file'), async (req, res) => {
   try {
     const file = req.file;
-    const region = process.env.MINIO_BUCKET_REGION 
-    const chapUrl = process.env.CHAP_URL
+    const region = process.env.MINIO_BUCKET_REGION;
+    const chapUrl = process.env.CHAP_URL;
 
     if (!chapUrl) {
       logger.error('Chap URL not set');
@@ -345,6 +346,13 @@ routes.post('/predict', upload.single('file'), async (req, res) => {
       return res.status(400).json(createErrorResponse('FILE_MISSING', 'No file uploaded'));
     }
 
+    try {
+      const historicData = extractHistoricData(file.buffer.toString());
+      await insertHistoricDiseaseData(historicData);
+    } catch (error) {
+      logger.error('There was an issue inserting the Historic Data: ' + JSON.stringify(error));
+    }
+
     const modelPrediction = new ModelPredictionUsingChap(chapUrl, logger);
 
     // start the Chap prediction job
@@ -352,7 +360,7 @@ routes.post('/predict', upload.single('file'), async (req, res) => {
 
     if (predictResponse?.status === 'success') {
       // wait for the prediction job to finish
-      const predictionResults = await new Promise((resolve, reject) => {
+      const predictionResults = (await new Promise((resolve, reject) => {
         const interval = setInterval(async () => {
           const statusResponse = await modelPrediction.getStatus();
           if (statusResponse?.status === 'idle' && statusResponse?.ready) {
@@ -360,21 +368,21 @@ routes.post('/predict', upload.single('file'), async (req, res) => {
             resolve((await modelPrediction.getResult()).data);
           }
         }, 250);
-      }) as any;
+      })) as any;
 
       // get organization code
       const orgCode = JSON.parse(file.buffer.toString())?.orgUnitsGeoJson.features[0].properties.code;
 
       const bucketName = sanitizeBucketName(
         `${file.originalname.split('.')[0]}-${Math.round(new Date().getTime() / 1000)}`
-      )
+      );
 
       const predictionResultsForMinio = predictionResults?.dataValues?.map((d: any) => {
         return {
           ...d,
           orgCode: orgCode ?? undefined,
           diseaseId: predictionResults.diseaseId as string,
-        }
+        };
       });
 
       await ensureBucketExists(bucketName, true);
@@ -384,7 +392,9 @@ routes.post('/predict', upload.single('file'), async (req, res) => {
       return res.status(200).json(predictionResultsForMinio);
     }
 
-    return res.status(500).json({ error: 'Error predicting model. Error response from Chap API' });
+    return res
+      .status(500)
+      .json({ error: 'Error predicting model. Error response from Chap API' });
   } catch (err) {
     logger.error('Error predicting model:');
     logger.error(err);

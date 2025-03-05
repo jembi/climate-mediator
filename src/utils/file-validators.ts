@@ -1,3 +1,11 @@
+import { PredictionPayload } from "./prediction-payload";
+
+export interface HistoricData{
+  organizational_unit: string;
+  period: string;
+  value: number;
+}
+
 export function validateJsonFile(file: Buffer) {
   const json = file.toString();
   try {
@@ -30,4 +38,21 @@ export function validateBucketName(bucket: string): boolean {
   // Bucket names must not end with the suffix -s3alias. This suffix is reserved for access point alias names.
   const regex = new RegExp(/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/);
   return regex.test(bucket);
+}
+
+export function extractHistoricData(jsonStringified: string): HistoricData[]{
+  const jsonPayload = JSON.parse(jsonStringified) as PredictionPayload;
+  const diseaseCases = jsonPayload.features.find(feature => feature['featureId'] === 'disease_cases')
+  
+  if(diseaseCases === undefined){
+    throw new Error("Could not find historic disease data within payload");
+  }
+
+  const {data} = diseaseCases;
+  const historicData = data.map((datum: {ou: string, pe: string, value: number}) => ({
+    organizational_unit: datum.ou,
+    period: datum.pe,
+    value: datum.value,
+  }));
+  return historicData;
 }
