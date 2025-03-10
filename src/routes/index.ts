@@ -167,7 +167,7 @@ const handleJsonPayload = async (file: Express.Multer.File, json: Object, bucket
 // Main route handler
 
 //TODO: What is the behavior if multiple files of the same name are uploaded?
-routes.post('/upload', async (req, res) => {
+routes.post('/chap-cli', async (req, res) => {
   const handleUpload = upload.fields([
     { name: 'training', maxCount: 1 },
     { name: 'historic', maxCount: 1 },
@@ -436,6 +436,67 @@ routes.get('/download-climate-data', async (req, res) => {
 
     return res.status(200).json({download: 'success', upload: 'success'});
   } catch (e) {
+    return res
+      .status(500)
+      .json(
+        createErrorResponse(
+          'INTERNAL_SERVER_ERROR',
+          e instanceof Error ? e.message : 'Unknown error'
+        )
+      );
+  }
+});
+
+routes.post('/upload', upload.single('file'), async (req, res) => {
+  try {
+    const file = req.file;
+    const bucket = req.query.bucket as string;
+    const region = req.query.region as string;
+    const createBucketIfNotExists = req.query.createBucketIfNotExists === 'true';
+
+    if (!file) {
+      logger.error('No file uploaded');
+      return res.status(400).json(createErrorResponse('FILE_MISSING', 'No file uploaded'));
+    }
+
+    if (!bucket) {
+      logger.error('No bucket provided');
+      return res.status(400).json(createErrorResponse('BUCKET_MISSING', 'No bucket provided'));
+    }
+
+    if (!validateBucketName(bucket)) {
+      logger.error(`Invalid bucket name ${bucket}`);
+      return res
+        .status(400)
+        .json(
+          createErrorResponse(
+            'INVALID_BUCKET_NAME',
+            'Bucket names must be between 3 (min) and 63 (max) characters long. Can consist only of lowercase letters, numbers, dots (.), and hyphens (-). Must not start with the prefix xn--. Must not end with the suffix -s3alias. This suffix is reserved for access point alias names.'
+          )
+        );
+    }
+
+    await ensureBucketExists(bucket, createBucketIfNotExists);
+
+    const response =
+      file.mimetype === 'text/csv'
+        ? await handleCsvFile([file], bucket)
+        : await handleJsonFile(file, bucket, region);
+
+    if (createBucketIfNotExists && getConfig().runningMode !== 'testing') {
+      await registerBucket(bucket);
+    }
+
+    const statusCode = response.status === 'success' ? 201 : 400;
+    return res.status(statusCode).json(response);
+  } catch (e) {
+    logger.error('Error processing upload:', e);
+
+    if (e instanceof BucketDoesNotExistError) {
+      const error = e as BucketDoesNotExistError;
+      return res.status(400).json(createErrorResponse('BUCKET_DOES_NOT_EXIST', error.message));
+    }
+
     return res
       .status(500)
       .json(
