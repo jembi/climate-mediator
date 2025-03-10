@@ -167,7 +167,7 @@ const handleJsonPayload = async (file: Express.Multer.File, json: Object, bucket
 // Main route handler
 
 //TODO: What is the behavior if multiple files of the same name are uploaded?
-routes.post('/chap-cli', async (req, res) => {
+routes.post('/synthetic-predict', async (req, res) => {
   const handleUpload = upload.fields([
     { name: 'training', maxCount: 1 },
     { name: 'historic', maxCount: 1 },
