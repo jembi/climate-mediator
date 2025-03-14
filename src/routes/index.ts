@@ -25,7 +25,7 @@ import { createClient } from '@clickhouse/client';
 import { ModelPredictionUsingChap } from '../services/ModelPredictionUsingChap';
 import { insertHistoricDiseaseData } from '../utils/clickhouse';
 import { createOrganizationsTable, insertOrganizationIntoTable } from '../utils/clickhouse';
-import removePrefix from '../middleware/remove-prefix';
+import removePrefixMiddleWare from '../middleware/remove-prefix';
 
 // Constants
 const VALID_MIME_TYPES = ['text/csv', 'application/json'] as const;
@@ -38,7 +38,7 @@ interface UploadResponse {
 }
 
 const routes = express.Router();
-routes.use(removePrefix('/climate'));
+routes.use(removePrefixMiddleWare('/climate'));
 
 const bodySizeLimit = getConfig().bodySizeLimit;
 const upload = multer({

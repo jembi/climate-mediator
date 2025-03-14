@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 
-const removePrefix = (prefix: string) => {
+const removePrefixMiddleWare = (prefix: string) => {
   return (req: Request, res: Response, next: NextFunction) => {
     if (req.url.startsWith(prefix)) {
       req.url = req.url.slice(prefix.length);
@@ -9,4 +9,4 @@ const removePrefix = (prefix: string) => {
   };
 };
 
-export default removePrefix;
+export default removePrefixMiddleWare;
