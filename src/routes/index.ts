@@ -111,7 +111,7 @@ const handleJsonPayload = async (file: Express.Multer.File, json: Object, bucket
       file.mimetype
     );
 
-    const tableNameOrganizations = sanitizeTableName(file.originalname) + '_organizations';
+    const tableNameOrganizations = sanitizeTableName(file.originalname.split('.')[0]) + '_organizations';
 
     await createOrganizationsTable(tableNameOrganizations);
     
