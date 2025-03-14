@@ -338,7 +338,7 @@ routes.post('/predict', upload.single('file'), async (req, res) => {
 			const orgCode = JSON.parse(file.buffer.toString())?.orgUnitsGeoJson.features[0].properties.code;
 
 			const bucketName = sanitizeBucketName(
-				`${file.originalname.split('.')[0]}-${Math.round(new Date().getTime() / 1000)}`
+				`${file.originalname.split('.')[0]}`
 			);
 
 			const predictionResultsForMinio = predictionResults?.dataValues?.map((d: any) => {
