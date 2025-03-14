@@ -268,8 +268,8 @@ function checkType(feature: any):
         feature.geometry.coordinates.every(isNumber)) {
       return {
         type: 'point',
-        latitude: feature.geometry.coordinates[0],
-        longitude: feature.geometry.coordinates[1],
+        latitude: feature.geometry.coordinates[1],
+        longitude: feature.geometry.coordinates[0],
       };
     }
   }
@@ -302,6 +302,7 @@ export async function insertOrganizationIntoTable(
 
   try {
     const json = JSON.parse(payload);
+    const timestamp = Date.now();
 
     const values = json.orgUnitsGeoJson.features.map((feature: any) => {
       const type = checkType(feature);
@@ -314,6 +315,7 @@ export async function insertOrganizationIntoTable(
         latitude: type.type == 'point' ? type.latitude : null,
         longitude: type.type == 'point' ? type.longitude : null,
         coordinates: type.type == 'polygon' ? type.coordinates : null,
+        timestamp,
       };
     });
 
@@ -321,7 +323,12 @@ export async function insertOrganizationIntoTable(
       table: 'default.' + normalizedTableName,
       values,
       format: 'JSONEachRow',
+      clickhouse_settings: {
+        optimize_on_insert: 1,
+      }
     })
+
+    await client.query
 
     logger.info(`Successfully inserted data into ${normalizedTableName}`);
     return true;
@@ -367,9 +374,10 @@ export async function createOrganizationsTable(
        type String,
        latitude Float32,
        longitude Float32,
-       coordinates Array(Array(Float32))
+       coordinates Array(Array(Float32)),
+       timestamp UInt64
       )
-      ENGINE = MergeTree
+      ENGINE = ReplacingMergeTree(timestamp)
       ORDER BY code
     `;
 

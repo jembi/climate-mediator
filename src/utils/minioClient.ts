@@ -269,7 +269,7 @@ export async function createMinioBucketListeners(listOfBuckets: string[]) {
       logger.info(`File received: ${file} from bucket ${tableName}`);
 
       try {
-        await triggerProcessing(bucket, file, tableName);
+        // await triggerProcessing(bucket, file, tableName);
         await minioClient.fGetObject(bucket, file, `tmp/${file}`);
 
         const fileBuffer = await readFile(`tmp/${file}`);
