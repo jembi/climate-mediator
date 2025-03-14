@@ -73,7 +73,6 @@ function getFirstField(json: any) {
 /**
  * Ensures a bucket exists, creates it if it doesn't
  * @param {string} bucket - Bucket name
- * @param {string} [region] - Bucket region
  * @param {boolean} [createBucketIfNotExists] - Whether to create the bucket if it doesn't exist
  * @returns {Promise<void>}
  */
@@ -269,7 +268,12 @@ export async function createMinioBucketListeners(listOfBuckets: string[]) {
       logger.info(`File received: ${file} from bucket ${tableName}`);
 
       try {
-        // await triggerProcessing(bucket, file, tableName);
+        try {
+          await triggerProcessing(bucket, file, tableName);
+        } catch (err) {
+          logger.error('Error triggering processing on OpenHim Console')
+        }
+
         await minioClient.fGetObject(bucket, file, `tmp/${file}`);
 
         const fileBuffer = await readFile(`tmp/${file}`);
@@ -293,22 +297,18 @@ export async function createMinioBucketListeners(listOfBuckets: string[]) {
             accessKey,
             secretKey,
           });
-        } else if (extension === 'csv' && getCsvHeaders(fileBuffer)) {
+        } else if (extension === 'csv' && getCsvHeaders(fileBuffer) && !/(training|history|future)\.csv/.test(file)) {
+          logger.debug('Inserting csv data to table');
           //get the first line of the csv file
-          // const fields = (await readFile(`tmp/${file}`, 'utf8')).split('\n')[0].split(',');
+          const fields = (await readFile(`tmp/${file}`, 'utf8')).split('\n')[0].split(',');
 
-          // await createTable(fields, tableName);
+          await createTable(fields, tableName);
 
-          // // If running locally and using docker compose, the minio host is 'minio'. This is to allow clickhouse to connect to the minio server
-
-          // // Construct the S3-style URL for the file
-          
-
-          // // Insert data into clickhouse
-          // await insertFromS3(tableName, minioUrl, {
-          //   accessKey,
-          //   secretKey,
-          // });
+          // Insert data into clickhouse
+          await insertFromS3(tableName, minioUrl, {
+            accessKey,
+            secretKey,
+          });
         } else {
           logger.warn(`Unknown file type - ${extension}`);
         }
