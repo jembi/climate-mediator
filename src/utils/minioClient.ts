@@ -1,23 +1,21 @@
+import axios from 'axios';
 import crypto from 'crypto';
 import { readFile, rm } from 'fs/promises';
 import * as Minio from 'minio';
-import axios from 'axios';
 
+import { createWriteStream } from 'fs';
+import fs from 'fs/promises';
+import path from 'path';
 import { getConfig } from '../config/config';
 import logger from '../logger';
+import { getOpenhimConfig, triggerProcessing } from '../openhim/openhim';
 import {
-  createOrganizationsTable,
   createTable,
   createTableFromJson,
   insertFromS3,
-  insertFromS3Json,
-  insertOrganizationIntoTable,
+  insertFromS3Json
 } from './clickhouse';
-import { validateJsonFile, getCsvHeaders } from './file-validators';
-import { getOpenhimConfig, triggerProcessing } from '../openhim/openhim';
-import fs from 'fs/promises';
-import { createWriteStream } from 'fs';
-import path from 'path';
+import { getCsvHeaders, validateJsonFile } from './file-validators';
 
 export interface Bucket {
   bucket: string;
