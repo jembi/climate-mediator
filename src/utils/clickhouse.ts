@@ -2,6 +2,7 @@ import { createClient } from '@clickhouse/client';
 import { getConfig } from '../config/config';
 import logger from '../logger';
 import { HistoricData } from './file-validators';
+import { cli } from 'winston/lib/winston/config';
 
 const { clickhouse } = getConfig();
 const { url, password } = clickhouse;
@@ -328,8 +329,6 @@ export async function insertOrganizationIntoTable(
       }
     })
 
-    await client.query
-
     logger.info(`Successfully inserted data into ${normalizedTableName}`);
     return true;
   } catch (error) {
@@ -378,7 +377,7 @@ export async function createOrganizationsTable(
        timestamp UInt64
       )
       ENGINE = ReplacingMergeTree(timestamp)
-      ORDER BY code
+      ORDER BY name
     `;
 
     logger.info(query);
@@ -397,4 +396,66 @@ export async function createOrganizationsTable(
     return false;
   }
   
+}
+
+export interface ClickhouseOrganzation {
+  code: string;
+  name: string;
+  level: number;
+  type: 'point' | 'polygon';
+  latitude: number;
+  longitude: number;
+  coordinates: [[number, number]];
+  timestamp: number;
+}
+
+export interface ClickhouseHistoricalDisease {
+  organizational_unit: string;
+  period: string;
+  value: number;
+}
+
+
+export async function fetchOrganizations() {
+  const client = createClient({
+    url,
+    password,
+  });
+
+  try {
+    const query = `
+      SELECT * FROM default.organizations
+    `;
+
+    const res = await (await client.query({ query})).json();
+
+    return res.data as ClickhouseOrganzation[];
+
+  } catch (err) {
+    logger.error('Error fetching organizations');
+    logger.error(err);
+    throw err;
+  }
+}
+
+export async function fetchHistoricalDisease() {
+  const client = createClient({
+    url,
+    password,
+  });
+
+  try {
+    const query = `
+      SELECT * FROM default.historical_disease
+    `;
+
+    const res = await (await client.query({ query})).json();
+
+    return res.data as ClickhouseHistoricalDisease[];
+
+  } catch (err) {
+    logger.error('Error fetching historical_disease');
+    logger.error(err);
+    throw err;
+  }
 }
