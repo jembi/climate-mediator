@@ -116,11 +116,9 @@ const handleJsonPayload = async (file: Express.Multer.File, json: Object, bucket
       file.mimetype
     );
 
-    const tableNameOrganizations = 'organizations';
-
-    await createOrganizationsTable(tableNameOrganizations);
+    await createOrganizationsTable();
     
-    await insertOrganizationIntoTable(tableNameOrganizations, file.buffer.toString());
+    await insertOrganizationIntoTable(file.buffer.toString());
    
     return uploadResult.success
       ? createSuccessResponse('UPLOAD_SUCCESS', uploadResult.message)
@@ -382,14 +380,12 @@ routes.get('/predict-inverse', async (req, res) => {
 
     const organizations = await fetchOrganizations();
     const historicDisease = await fetchHistoricalDisease();
-		const payload = buildChapPayload(historicDisease, organizations);
 
-		// try {
-		// 	const historicData = extractHistoricData(file.buffer.toString());
-		// 	await insertHistoricDiseaseData(historicData);
-		// } catch (error) {
-		// 	logger.error('There was an issue inserting the Historic Data: ' + JSON.stringify(error));
-		// }
+    if (!organizations.length || !historicDisease.length) {
+      return res.status(500).json({ error: 'No data found in Clickhouse' });
+    }
+
+		const payload = buildChapPayload(historicDisease, organizations);
 
 		const modelPrediction = new ModelPredictionUsingChap(chapUrl, logger);
 
@@ -405,31 +401,31 @@ routes.get('/predict-inverse', async (req, res) => {
 						clearInterval(interval);
 						resolve((await modelPrediction.getResult()).data);
 					}
-				}, 250);
+				}, 333);
 			})) as any;
 
-      return res.status(200).json(predictionResults)
+			const bucketName = sanitizeBucketName('prediction');
+      const fileName = new Date().getTime() + '.json';
+			const predictionResultsForMinio = predictionResults?.dataValues?.map((d: any) => {
+				return {
+					...d,
+					diseaseId: predictionResults.diseaseId as string,
+				};
+			});
 
-		// 	// get organization code
-		// 	const orgCode = JSON.parse(file.buffer.toString())?.orgUnitsGeoJson.features[0].properties.code;
+			await ensureBucketExists(bucketName, true);
+			const uploadResult = await uploadFileBufferToMinio(
+        Buffer.from(JSON.stringify(predictionResultsForMinio)),
+        fileName,
+        bucketName,
+        'application/json',
+      );
 
-		// 	const bucketName = sanitizeBucketName(
-		// 		`${file.originalname.split('.')[0]}`
-		// 	);
-
-		// 	const predictionResultsForMinio = predictionResults?.dataValues?.map((d: any) => {
-		// 		return {
-		// 			...d,
-		// 			orgCode: orgCode ?? undefined,
-		// 			diseaseId: predictionResults.diseaseId as string,
-		// 		};
-		// 	});
-
-		// 	await ensureBucketExists(bucketName, true);
-
-		// 	await handleJsonPayload(file, predictionResultsForMinio, bucketName);
-
-		// 	return res.status(200).json(predictionResultsForMinio);
+      if (uploadResult.success) {
+        return res.status(200).json({ message: 'Prediction results uploaded successfully', results: predictionResultsForMinio  });
+      } else {
+        return res.status(500).json({ message: 'Failed to upload prediction results' });
+      }
 		}
 
 		return res

@@ -65,10 +65,6 @@ export async function createTableFromJson(
     password,
   });
 
-  const ping = await client.ping();
-
-  logger.info(`Clickhouse Ping: ${ping.success}`);
-
   const normalizedTableName = tableName.replace(/-/g, '_');
 
   try {
@@ -288,8 +284,17 @@ function checkType(feature: any):
   throw new Error('Invalid geometry type. ' + JSON.stringify(feature));
 }
 
+export async function setupClickhouseTables() {
+  try {
+    await createHistoricalDiseaseTable();
+    await createOrganizationsTable();
+  } catch (err) {
+    logger.error('Error setting up Clickhouse tables');
+    logger.error(err);
+  }
+}
+
 export async function insertOrganizationIntoTable(
-  tableName: string,
   payload: string,
 ) {
   const client = createClient({
@@ -297,7 +302,7 @@ export async function insertOrganizationIntoTable(
     password,
   });
 
-  const normalizedTableName = tableName.replace(/-/g, '_');
+  const normalizedTableName = 'organizations';
 
   logger.info(`Inserting data into ${normalizedTableName}`);
 
@@ -340,12 +345,10 @@ export async function insertOrganizationIntoTable(
   }
 }
 
-export async function createOrganizationsTable(
-  tableName: string,
-) {
-  const normalizedTableName = tableName.replace(/-/g, '_');
+export async function createOrganizationsTable() {
+  const tableNameOrganizations = 'organizations';
 
-  logger.info(`Creating Organizations table from JSON ${normalizedTableName}`);
+  logger.info(`Creating Organizations table from JSON ${tableNameOrganizations}`);
 
   const client = createClient({
     url,
@@ -355,9 +358,9 @@ export async function createOrganizationsTable(
   //check if the table exists
   try {
     const existsResult = await client.query({
-      query: `desc ${normalizedTableName}`,
+      query: `desc ${tableNameOrganizations}`,
     });
-    logger.info(`Table ${normalizedTableName} already exists`);
+    logger.info(`Table ${tableNameOrganizations} already exists`);
     await client.close();
     return false;
   } catch (error) {
@@ -366,7 +369,7 @@ export async function createOrganizationsTable(
   try {
     
     const query = `
-      CREATE TABLE IF NOT EXISTS \`default\`.${normalizedTableName}
+      CREATE TABLE IF NOT EXISTS \`default\`.${tableNameOrganizations}
       ( code String,
        name String,
        level String,
@@ -384,14 +387,14 @@ export async function createOrganizationsTable(
 
     const res = await client.query({ query });
 
-    logger.info(`Successfully created table from JSON ${normalizedTableName}`);
+    logger.info(`Successfully created table from JSON ${tableNameOrganizations}`);
     logger.info(res);
 
     await client.close();
 
     return true;
   } catch (err) {
-    logger.error(`Error creating table from JSON ${normalizedTableName}`);
+    logger.error(`Error creating table from JSON ${tableNameOrganizations}`);
     logger.error(err);
     return false;
   }
@@ -446,7 +449,9 @@ export async function fetchHistoricalDisease() {
 
   try {
     const query = `
-      SELECT * FROM default.historical_disease
+      SELECT DISTINCT ON(historical_disease.organizational_unit, historical_disease.period) hd.*
+      FROM historical_disease hd
+      INNER JOIN organizations oo ON oo.name = hd.organizational_unit
     `;
 
     const res = await (await client.query({ query})).json();
