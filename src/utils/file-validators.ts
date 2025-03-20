@@ -6,6 +6,12 @@ export interface HistoricData{
   value: number;
 }
 
+export interface PopulationData{
+  organizational_unit: string;
+  period: string;
+  value: number;  
+}
+
 export function validateJsonFile(file: Buffer) {
   const json = file.toString();
   try {
@@ -55,4 +61,21 @@ export function extractHistoricData(jsonStringified: string): HistoricData[]{
     value: datum.value,
   }));
   return historicData;
+}
+
+export function extractPopulationData(jsonStringified: string): PopulationData[]{
+  const jsonPayload = JSON.parse(jsonStringified) as PredictionPayload;
+  const populationDatas = jsonPayload.features.find(feature => feature['featureId'] === 'population')
+
+  if(populationDatas === undefined){ 
+    throw new Error("Could not find population data within payload");
+  }
+
+  const {data} = populationDatas;
+  const populationData = data.map((datum: {ou: string, pe: string, value: number}) => ({
+    organizational_unit: datum.ou,
+    period: datum.pe,
+    value: datum.value,
+  }));
+  return populationData;
 }
