@@ -7,7 +7,7 @@ export function buildChapPayload(historicalDisease: ClickhouseHistoricalDisease[
 			{
 				featureId: "disease_cases",
 				dhis2Id: "Jzk4NxHtpz2",
-				data: historicalDisease.filter(d => d.organizational_unit != 'A.A. BOLE').map((disease) => {
+				data: historicalDisease.map((disease) => {
 					return {
 						ou: disease.organizational_unit,
 						pe: disease.period,
@@ -19,7 +19,7 @@ export function buildChapPayload(historicalDisease: ClickhouseHistoricalDisease[
 			{
 				featureId: "population",
 				dhis2Id: "K9QpxzIH3po",
-				
+
 				// @todo: get population data from population table (need to create one)
 				data: historicalDisease.map((data) => {
 					return {
