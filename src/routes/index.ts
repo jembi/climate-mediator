@@ -10,9 +10,10 @@ import { createErrorResponse, createSuccessResponse, UploadResponse } from '../h
 import logger from '../logger';
 import { registerBucket } from '../openhim/openhim';
 import { ModelPredictionUsingChap } from '../services/ModelPredictionUsingChap';
-import { createOrganizationsTable, insertHistoricDiseaseData, insertOrganizationIntoTable } from '../utils/clickhouse';
+import { createOrganizationsTable, insertHistoricDiseaseData, insertOrganizationIntoTable, insertPopulationData } from '../utils/clickhouse';
 import {
   extractHistoricData,
+  extractPopulationData,
   validateBucketName
 } from '../utils/file-validators';
 import {
@@ -116,7 +117,7 @@ const handleJsonPayload = async (file: Express.Multer.File, json: Object, bucket
     );
 
     const tableNameOrganizations = sanitizeTableName(file.originalname.split('.')[0]) + '_organizations';
-
+  
     await createOrganizationsTable(tableNameOrganizations);
     
     await insertOrganizationIntoTable(tableNameOrganizations, file.buffer.toString());
@@ -317,6 +318,9 @@ routes.post('/predict', upload.single('file'), async (req, res) => {
 		try {
 			const historicData = extractHistoricData(file.buffer.toString());
 			await insertHistoricDiseaseData(historicData);
+
+      const populationData = extractPopulationData(file.buffer.toString());
+      await insertPopulationData(populationData);
 		} catch (error) {
 			logger.error('There was an issue inserting the Historic Data: ' + JSON.stringify(error));
 		}
