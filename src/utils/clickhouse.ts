@@ -1,7 +1,7 @@
 import { createClient } from '@clickhouse/client';
 import { getConfig } from '../config/config';
 import logger from '../logger';
-import { HistoricData, PopulationData } from './file-validators';
+import { HistoricData } from './file-validators';
 import { cli } from 'winston/lib/winston/config';
 
 const { clickhouse } = getConfig();
@@ -311,28 +311,6 @@ export async function insertHistoricDiseaseData(
   }
   return client.close();
 }
-
-export async function insertPopulationData(
-  populationData: PopulationData[]
-) {
-  const client = createClient({
-    url,
-    password,
-  });
-  try {
-    logger.debug('Now inserting data');
-    await client.insert({
-      table: 'population_data',
-      values: populationData,
-      format: 'JSONEachRow',
-    });
-    logger.debug('Insertion successful');
-  } catch (error) {
-    logger.error('There was an issue inserting the data into clickhouse: ' + JSON.stringify(error));
-  }
-  return client.close();
-}
-
 function isNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
@@ -438,6 +416,7 @@ export async function createOrganizationsTable() {
     password,
   });
 
+  //check if the table exists
   try {
     const existsResult = await client.query({
       query: `desc ${tableNameOrganizations}`,
@@ -455,7 +434,7 @@ export async function createOrganizationsTable() {
       return false;
     }
   }
-  
+
   try {
     
     const query = `
