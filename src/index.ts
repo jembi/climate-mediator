@@ -5,7 +5,7 @@ import logger from './logger';
 import { getMediatorConfig, initializeBuckets, setupMediator } from './openhim/openhim';
 import routes from './routes/index';
 import { MinioBucketsRegistry } from './types/mediatorConfig';
-import { setupClickhouseTables, createHistoricalDiseaseTable, createPopulationTable } from './utils/clickhouse';
+import { setupClickhouseTables } from './utils/clickhouse';
 
 const app = express();
 
@@ -29,8 +29,6 @@ app.listen(getConfig().port, async () => {
     );
   } else {
     logger.debug('Connection to ClickHouse successful');
-    await createHistoricalDiseaseTable();
-    await createPopulationTable();
     await setupClickhouseTables();
   }
 
