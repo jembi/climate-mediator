@@ -5,7 +5,7 @@ import FormData from 'form-data';
 import fs from 'fs/promises';
 import multer from 'multer';
 import { getConfig } from '../config/config';
-import { saveToTmp } from '../helpers/files';
+import { sanitizeTableName, saveToTmp } from '../helpers/files';
 import { createErrorResponse, createSuccessResponse, UploadResponse } from '../helpers/responses';
 import logger from '../logger';
 import removePrefixMiddleWare from '../middleware/remove-prefix';

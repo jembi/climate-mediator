@@ -447,9 +447,9 @@ export async function createOrganizationsTable() {
     return false;
   } catch (error) {
     if (error instanceof Error && error.message.includes('Table') && error.message.includes('not found')) {
-      logger.debug(`Table ${normalizedTableName} does not exist`);
+      logger.debug(`Table ${tableNameOrganizations} does not exist`);
     } else {
-      logger.error(`Error checking if ${normalizedTableName} table exists:`);
+      logger.error(`Error checking if ${tableNameOrganizations} table exists:`);
       logger.error(error);
       await client.close();
       return false;
