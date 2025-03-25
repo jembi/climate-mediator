@@ -2,6 +2,7 @@ import { createClient } from '@clickhouse/client';
 import { getConfig } from '../config/config';
 import logger from '../logger';
 import { HistoricData, PopulationData } from './file-validators';
+import { cli } from 'winston/lib/winston/config';
 
 const { clickhouse } = getConfig();
 const { url, password } = clickhouse;
@@ -63,10 +64,6 @@ export async function createTableFromJson(
     url,
     password,
   });
-
-  const ping = await client.ping();
-
-  logger.info(`Clickhouse Ping: ${ping.success}`);
 
   const normalizedTableName = tableName.replace(/-/g, '_');
 
@@ -370,8 +367,17 @@ function checkType(feature: any):
   throw new Error('Invalid geometry type. ' + JSON.stringify(feature));
 }
 
+export async function setupClickhouseTables() {
+  try {
+    await createHistoricalDiseaseTable();
+    await createOrganizationsTable();
+  } catch (err) {
+    logger.error('Error setting up Clickhouse tables');
+    logger.error(err);
+  }
+}
+
 export async function insertOrganizationIntoTable(
-  tableName: string,
   payload: string,
 ) {
   const client = createClient({
@@ -379,7 +385,7 @@ export async function insertOrganizationIntoTable(
     password,
   });
 
-  const normalizedTableName = tableName.replace(/-/g, '_');
+  const normalizedTableName = 'organizations';
 
   logger.info(`Inserting data into ${normalizedTableName}`);
 
@@ -411,8 +417,6 @@ export async function insertOrganizationIntoTable(
       }
     })
 
-    await client.query
-
     logger.info(`Successfully inserted data into ${normalizedTableName}`);
     return true;
   } catch (error) {
@@ -424,12 +428,10 @@ export async function insertOrganizationIntoTable(
   }
 }
 
-export async function createOrganizationsTable(
-  tableName: string,
-) {
-  const normalizedTableName = tableName.replace(/-/g, '_');
+export async function createOrganizationsTable() {
+  const tableNameOrganizations = 'organizations';
 
-  logger.info(`Creating Organizations table from JSON ${normalizedTableName}`);
+  logger.info(`Creating Organizations table from JSON ${tableNameOrganizations}`);
 
   const client = createClient({
     url,
@@ -438,9 +440,9 @@ export async function createOrganizationsTable(
 
   try {
     const existsResult = await client.query({
-      query: `desc ${normalizedTableName}`,
+      query: `desc ${tableNameOrganizations}`,
     });
-    logger.info(`Table ${normalizedTableName} already exists`);
+    logger.info(`Table ${tableNameOrganizations} already exists`);
     await client.close();
     return false;
   } catch (error) {
@@ -457,7 +459,7 @@ export async function createOrganizationsTable(
   try {
     
     const query = `
-      CREATE TABLE IF NOT EXISTS \`default\`.${normalizedTableName}
+      CREATE TABLE IF NOT EXISTS \`default\`.${tableNameOrganizations}
       ( code String,
        name String,
        level String,
@@ -468,23 +470,87 @@ export async function createOrganizationsTable(
        timestamp UInt64
       )
       ENGINE = ReplacingMergeTree(timestamp)
-      ORDER BY code
+      ORDER BY name
     `;
 
     logger.info(query);
 
     const res = await client.query({ query });
 
-    logger.info(`Successfully created table from JSON ${normalizedTableName}`);
+    logger.info(`Successfully created table from JSON ${tableNameOrganizations}`);
     logger.info(res);
 
     await client.close();
 
     return true;
   } catch (err) {
-    logger.error(`Error creating table from JSON ${normalizedTableName}`);
+    logger.error(`Error creating table from JSON ${tableNameOrganizations}`);
     logger.error(err);
     return false;
   }
   
+}
+
+export interface ClickhouseOrganzation {
+  code: string;
+  name: string;
+  level: number;
+  type: 'point' | 'polygon';
+  latitude: number;
+  longitude: number;
+  coordinates: [[number, number]];
+  timestamp: number;
+}
+
+export interface ClickhouseHistoricalDisease {
+  organizational_unit: string;
+  period: string;
+  value: number;
+}
+
+
+export async function fetchOrganizations() {
+  const client = createClient({
+    url,
+    password,
+  });
+
+  try {
+    const query = `
+      SELECT * FROM default.organizations
+    `;
+
+    const res = await (await client.query({ query})).json();
+
+    return res.data as ClickhouseOrganzation[];
+
+  } catch (err) {
+    logger.error('Error fetching organizations');
+    logger.error(err);
+    throw err;
+  }
+}
+
+export async function fetchHistoricalDisease() {
+  const client = createClient({
+    url,
+    password,
+  });
+
+  try {
+    const query = `
+      SELECT DISTINCT ON(historical_disease.organizational_unit, historical_disease.period) hd.*
+      FROM historical_disease hd
+      INNER JOIN organizations oo ON oo.name = hd.organizational_unit
+    `;
+
+    const res = await (await client.query({ query})).json();
+
+    return res.data as ClickhouseHistoricalDisease[];
+
+  } catch (err) {
+    logger.error('Error fetching historical_disease');
+    logger.error(err);
+    throw err;
+  }
 }

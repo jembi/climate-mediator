@@ -5,12 +5,15 @@ import FormData from 'form-data';
 import fs from 'fs/promises';
 import multer from 'multer';
 import { getConfig } from '../config/config';
-import { sanitizeTableName, saveToTmp } from '../helpers/files';
+import { saveToTmp } from '../helpers/files';
 import { createErrorResponse, createSuccessResponse, UploadResponse } from '../helpers/responses';
 import logger from '../logger';
+import removePrefixMiddleWare from '../middleware/remove-prefix';
 import { registerBucket } from '../openhim/openhim';
 import { ModelPredictionUsingChap } from '../services/ModelPredictionUsingChap';
-import { createOrganizationsTable, insertHistoricDiseaseData, insertOrganizationIntoTable, insertPopulationData } from '../utils/clickhouse';
+import { buildChapPayload } from '../utils/chap';
+import { createOrganizationsTable, fetchHistoricalDisease, fetchOrganizations, insertHistoricDiseaseData, insertOrganizationIntoTable, insertPopulationData } from '../utils/clickhouse';
+
 import {
   extractHistoricData,
   extractPopulationData,
@@ -25,7 +28,6 @@ import {
   uploadFileBufferToMinio,
   uploadToMinio,
 } from '../utils/minioClient';
-import removePrefixMiddleWare from '../middleware/remove-prefix';
 
 // Constants
 const VALID_MIME_TYPES = ['text/csv', 'application/json'] as const;
@@ -117,10 +119,9 @@ const handleJsonPayload = async (file: Express.Multer.File, json: Object, bucket
     );
 
     const tableNameOrganizations = sanitizeTableName(file.originalname.split('.')[0]) + '_organizations';
-  
-    await createOrganizationsTable(tableNameOrganizations);
+    await createOrganizationsTable();
     
-    await insertOrganizationIntoTable(tableNameOrganizations, file.buffer.toString());
+    await insertOrganizationIntoTable(file.buffer.toString());
    
     return uploadResult.success
       ? createSuccessResponse('UPLOAD_SUCCESS', uploadResult.message)
@@ -362,6 +363,75 @@ routes.post('/predict', upload.single('file'), async (req, res) => {
 			await handleJsonPayload(file, predictionResultsForMinio, bucketName);
 
 			return res.status(200).json(predictionResultsForMinio);
+		}
+
+		return res
+			.status(500)
+			.json({ error: 'Error predicting model. Error response from Chap API' });
+	} catch (err) {
+		logger.error('Error predicting model:');
+		logger.error(err);
+		return res.status(500).json({ error: 'An unexpected error has occured' });
+	}
+});
+
+routes.get('/predict-inverse', async (req, res) => {
+	try {
+		const chapUrl = process.env.CHAP_URL;
+
+		if (!chapUrl) {
+			logger.error('Chap URL not set');
+			return res.status(500).json(createErrorResponse('ENV_MISSING', 'Chap URL not set'));
+		}
+
+    const organizations = await fetchOrganizations();
+    const historicDisease = await fetchHistoricalDisease();
+
+    if (!organizations.length || !historicDisease.length) {
+      return res.status(500).json({ error: 'No data found in Clickhouse' });
+    }
+
+		const payload = buildChapPayload(historicDisease, organizations);
+
+		const modelPrediction = new ModelPredictionUsingChap(chapUrl, logger);
+
+		// start the Chap prediction job
+		const predictResponse = await modelPrediction.predict({ data: payload });
+
+		if (predictResponse?.status === 'success') {
+			// wait for the prediction job to finish
+			const predictionResults = (await new Promise((resolve, reject) => {
+				const interval = setInterval(async () => {
+					const statusResponse = await modelPrediction.getStatus();
+					if (statusResponse?.status === 'idle' && statusResponse?.ready) {
+						clearInterval(interval);
+						resolve((await modelPrediction.getResult()).data);
+					}
+				}, 333);
+			})) as any;
+
+			const bucketName = sanitizeBucketName('prediction');
+      const fileName = new Date().getTime() + '.json';
+			const predictionResultsForMinio = predictionResults?.dataValues?.map((d: any) => {
+				return {
+					...d,
+					diseaseId: predictionResults.diseaseId as string,
+				};
+			});
+
+			await ensureBucketExists(bucketName, true);
+			const uploadResult = await uploadFileBufferToMinio(
+        Buffer.from(JSON.stringify(predictionResultsForMinio)),
+        fileName,
+        bucketName,
+        'application/json',
+      );
+
+      if (uploadResult.success) {
+        return res.status(200).json({ message: 'Prediction results uploaded successfully', results: predictionResultsForMinio  });
+      } else {
+        return res.status(500).json({ message: 'Failed to upload prediction results' });
+      }
 		}
 
 		return res
