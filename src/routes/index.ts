@@ -116,7 +116,7 @@ const handleJsonPayload = async (file: Express.Multer.File, json: Object, bucket
       bucket,
       file.mimetype
     );
-
+  
     await createOrganizationsTable();
     
     await insertOrganizationIntoTable(file.buffer.toString());
