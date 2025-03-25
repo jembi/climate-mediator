@@ -218,8 +218,9 @@ export async function createHistoricalDiseaseTable() {
     await client.close();
     return false;
   } catch (error) {
-    if (error instanceof Error && error.message.includes('Table') && error.message.includes('not found')) {
+    if (error instanceof Error && error.message.includes('Table') && (error.message.includes('not found') || error.message.includes('does not exist'))) {
       logger.debug('Table historical_disease does not exist');
+      logger.debug(error);
     } else {
       logger.error('Error checking if historical_disease table exists:');
       logger.error(error);
@@ -261,8 +262,9 @@ export async function createPopulationTable() {
     await client.close();
     return false;
   } catch (error) {
-    if (error instanceof Error && error.message.includes('Table') && error.message.includes('not found')) {
+    if (error instanceof Error && (error.message.includes('Table') && (error.message.includes('not found') || error.message.includes('does not exist')))) {
       logger.debug('Table population_data does not exist');
+      logger.debug(error);
     } else {
       logger.error('Error checking if population_data table exists:');
       logger.error(error);
@@ -446,8 +448,9 @@ export async function createOrganizationsTable() {
     await client.close();
     return false;
   } catch (error) {
-    if (error instanceof Error && error.message.includes('Table') && error.message.includes('not found')) {
+    if (error instanceof Error && (error.message.includes('Table') && (error.message.includes('not found') || error.message.includes('does not exist')))) {
       logger.debug(`Table ${tableNameOrganizations} does not exist`);
+      logger.debug(error);
     } else {
       logger.error(`Error checking if ${tableNameOrganizations} table exists:`);
       logger.error(error);
