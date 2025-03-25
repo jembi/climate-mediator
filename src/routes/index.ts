@@ -5,16 +5,18 @@ import FormData from 'form-data';
 import fs from 'fs/promises';
 import multer from 'multer';
 import { getConfig } from '../config/config';
-import { saveToTmp } from '../helpers/files';
+import { sanitizeTableName, saveToTmp } from '../helpers/files';
 import { createErrorResponse, createSuccessResponse, UploadResponse } from '../helpers/responses';
 import logger from '../logger';
 import removePrefixMiddleWare from '../middleware/remove-prefix';
 import { registerBucket } from '../openhim/openhim';
 import { ModelPredictionUsingChap } from '../services/ModelPredictionUsingChap';
 import { buildChapPayload } from '../utils/chap';
-import { createOrganizationsTable, fetchHistoricalDisease, fetchOrganizations, insertHistoricDiseaseData, insertOrganizationIntoTable } from '../utils/clickhouse';
+import { createOrganizationsTable, fetchHistoricalDisease, fetchOrganizations, insertHistoricDiseaseData, insertOrganizationIntoTable, insertPopulationData } from '../utils/clickhouse';
+
 import {
   extractHistoricData,
+  extractPopulationData,
   validateBucketName
 } from '../utils/file-validators';
 import {
@@ -116,6 +118,7 @@ const handleJsonPayload = async (file: Express.Multer.File, json: Object, bucket
       file.mimetype
     );
 
+    const tableNameOrganizations = sanitizeTableName(file.originalname.split('.')[0]) + '_organizations';
     await createOrganizationsTable();
     
     await insertOrganizationIntoTable(file.buffer.toString());
@@ -316,6 +319,9 @@ routes.post('/predict', upload.single('file'), async (req, res) => {
 		try {
 			const historicData = extractHistoricData(file.buffer.toString());
 			await insertHistoricDiseaseData(historicData);
+
+      const populationData = extractPopulationData(file.buffer.toString());
+      await insertPopulationData(populationData);
 		} catch (error) {
 			logger.error('There was an issue inserting the Historic Data: ' + JSON.stringify(error));
 		}

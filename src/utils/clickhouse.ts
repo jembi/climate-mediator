@@ -1,7 +1,7 @@
 import { createClient } from '@clickhouse/client';
 import { getConfig } from '../config/config';
 import logger from '../logger';
-import { HistoricData } from './file-validators';
+import { HistoricData, PopulationData } from './file-validators';
 import { cli } from 'winston/lib/winston/config';
 
 const { clickhouse } = getConfig();
@@ -211,6 +211,24 @@ export async function createHistoricalDiseaseTable() {
   });
 
   try {
+    const existsResult = await client.query({
+      query: `desc historical_disease`,
+    });
+    logger.info(`Table historical_disease already exists`);
+    await client.close();
+    return false;
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('Table') && error.message.includes('not found')) {
+      logger.debug('Table historical_disease does not exist');
+    } else {
+      logger.error('Error checking if historical_disease table exists:');
+      logger.error(error);
+      await client.close();
+      return false;
+    }
+  }
+
+  try {
     logger.debug('Now creating table');
     await client.query({
       query: `
@@ -222,7 +240,50 @@ export async function createHistoricalDiseaseTable() {
                 ORDER BY (organizational_unit)
             `,
     });
-    logger.debug('Table created successfully');
+    logger.debug('historical_disease table created successfully');
+  } catch (error) {
+    logger.error("There was an issue creating the table in clickhouse: " + JSON.stringify(error));
+  }
+  return client.close();
+}
+
+export async function createPopulationTable() {
+  const client = createClient({
+    url,
+    password,
+  }); 
+
+  try {
+    const existsResult = await client.query({
+      query: `desc population_data`,
+    });
+    logger.info(`Table population_data already exists`);
+    await client.close();
+    return false;
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('Table') && error.message.includes('not found')) {
+      logger.debug('Table population_data does not exist');
+    } else {
+      logger.error('Error checking if population_data table exists:');
+      logger.error(error);
+      await client.close();
+      return false;
+    }
+  }
+
+  try {
+    logger.debug('Now creating table');
+    await client.query({
+      query: `
+        CREATE TABLE IF NOT EXISTS population_data (
+          organizational_unit String,
+          period String,
+          value UInt64
+        ) ENGINE = MergeTree()
+        ORDER BY (organizational_unit)
+      `,
+    });
+    logger.debug('population_data table created successfully');
   } catch (error) {
     logger.error("There was an issue creating the table in clickhouse: " + JSON.stringify(error));
   }
@@ -250,6 +311,28 @@ export async function insertHistoricDiseaseData(
   }
   return client.close();
 }
+
+export async function insertPopulationData(
+  populationData: PopulationData[]
+) {
+  const client = createClient({
+    url,
+    password,
+  });
+  try {
+    logger.debug('Now inserting data');
+    await client.insert({
+      table: 'population_data',
+      values: populationData,
+      format: 'JSONEachRow',
+    });
+    logger.debug('Insertion successful');
+  } catch (error) {
+    logger.error('There was an issue inserting the data into clickhouse: ' + JSON.stringify(error));
+  }
+  return client.close();
+}
+
 function isNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
@@ -355,7 +438,6 @@ export async function createOrganizationsTable() {
     password,
   });
 
-  //check if the table exists
   try {
     const existsResult = await client.query({
       query: `desc ${tableNameOrganizations}`,
@@ -364,8 +446,16 @@ export async function createOrganizationsTable() {
     await client.close();
     return false;
   } catch (error) {
+    if (error instanceof Error && error.message.includes('Table') && error.message.includes('not found')) {
+      logger.debug(`Table ${tableNameOrganizations} does not exist`);
+    } else {
+      logger.error(`Error checking if ${tableNameOrganizations} table exists:`);
+      logger.error(error);
+      await client.close();
+      return false;
+    }
   }
-
+  
   try {
     
     const query = `
