@@ -60,8 +60,6 @@ export async function createTableFromJson(
   tableName: string,
   groupByColumnName: string
 ) {
-  
-  createGenericTable(tableName, '', groupByColumnName);
   const client = createClient({
     url,
     password,
