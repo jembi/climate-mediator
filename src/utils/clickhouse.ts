@@ -525,7 +525,8 @@ export async function fetchOrganizations() {
 
   try {
     const query = `
-      SELECT * FROM default.organizations
+      SELECT DISTINCT ON(code, name) *
+      FROM default.organizations
     `;
 
     const res = await (await client.query({ query})).json();
