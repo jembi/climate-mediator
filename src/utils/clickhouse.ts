@@ -510,6 +510,12 @@ export interface ClickhouseHistoricalDisease {
   value: number;
 }
 
+export interface ClickhousePopulationData {
+  organizational_unit: string;
+  period: string;
+  value: number;
+}
+
 
 export async function fetchOrganizations() {
   const client = createClient({
@@ -544,6 +550,7 @@ export async function fetchHistoricalDisease() {
       SELECT DISTINCT ON(historical_disease.organizational_unit, historical_disease.period) hd.*
       FROM historical_disease hd
       INNER JOIN organizations oo ON oo.name = hd.organizational_unit
+      
     `;
 
     const res = await (await client.query({ query})).json();
@@ -552,6 +559,35 @@ export async function fetchHistoricalDisease() {
 
   } catch (err) {
     logger.error('Error fetching historical_disease');
+    logger.error(err);
+    throw err;
+  }
+}
+
+export async function fetchPopulationData() {
+  const client = createClient({
+    url,
+    password,
+  });
+
+  try {
+    const query = `
+      SELECT DISTINCT ON(population_data.organizational_unit, population_data.period)
+        pd.organizational_unit AS organizational_unit,
+        pd.period AS period,
+        pd.value AS value
+      FROM population_data pd
+      INNER JOIN organizations oo ON oo.name = pd.organizational_unit
+      INNER JOIN historical_disease hd ON hd.organizational_unit = pd.organizational_unit
+      
+    `;
+
+    const res = await (await client.query({ query})).json();
+
+    return res.data as ClickhousePopulationData[];
+
+  } catch (err) {
+    logger.error('Error fetching populiation_data');
     logger.error(err);
     throw err;
   }
