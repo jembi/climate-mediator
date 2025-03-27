@@ -1,6 +1,6 @@
-import { ClickhouseHistoricalDisease, ClickhouseOrganzation } from "./clickhouse";
+import { ClickhouseHistoricalDisease, ClickhouseOrganzation, ClickhousePopulationData } from "./clickhouse";
 
-export function buildChapPayload(historicalDisease: ClickhouseHistoricalDisease[], organizations: ClickhouseOrganzation[]): any {
+export function buildChapPayload(historicalDisease: ClickhouseHistoricalDisease[], organizations: ClickhouseOrganzation[], populations: ClickhousePopulationData[]): any {
 	const payload = {
 		model_id: 'chap_ewars_monthly',
 		features: [
@@ -11,7 +11,7 @@ export function buildChapPayload(historicalDisease: ClickhouseHistoricalDisease[
 					return {
 						ou: disease.organizational_unit,
 						pe: disease.period,
-						value: disease.value
+						value: +disease.value
 					};
 				}
 				)
@@ -19,13 +19,11 @@ export function buildChapPayload(historicalDisease: ClickhouseHistoricalDisease[
 			{
 				featureId: "population",
 				dhis2Id: "K9QpxzIH3po",
-
-				// @todo: get population data from population table (need to create one)
-				data: historicalDisease.map((data) => {
+				data: populations.map((population) => {
 					return {
-						ou: data.organizational_unit,
-						pe: data.period,
-						value: data.value
+						ou: population.organizational_unit,
+						pe: population.period,
+						value: +population.value
 					};
 				}
 				),
@@ -52,6 +50,7 @@ export function buildChapPayload(historicalDisease: ClickhouseHistoricalDisease[
 				};
 			})
 		},
+		n_periods: 3
 	};
 
   return payload;

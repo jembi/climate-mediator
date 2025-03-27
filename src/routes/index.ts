@@ -12,7 +12,7 @@ import removePrefixMiddleWare from '../middleware/remove-prefix';
 import { registerBucket } from '../openhim/openhim';
 import { ModelPredictionUsingChap } from '../services/ModelPredictionUsingChap';
 import { buildChapPayload } from '../utils/chap';
-import { createOrganizationsTable, fetchHistoricalDisease, fetchOrganizations, insertHistoricDiseaseData, insertOrganizationIntoTable, insertPopulationData } from '../utils/clickhouse';
+import { createOrganizationsTable, fetchHistoricalDisease, fetchOrganizations, fetchPopulationData, insertHistoricDiseaseData, insertOrganizationIntoTable, insertPopulationData } from '../utils/clickhouse';
 import {
   extractHistoricData,
   extractPopulationData,
@@ -383,12 +383,13 @@ routes.get('/predict-inverse', async (req, res) => {
 
     const organizations = await fetchOrganizations();
     const historicDisease = await fetchHistoricalDisease();
+    const populations = await fetchPopulationData();
 
-    if (!organizations.length || !historicDisease.length) {
+    if (!organizations.length || !historicDisease.length || !populations.length) {
       return res.status(500).json({ error: 'No data found in Clickhouse' });
     }
 
-		const payload = buildChapPayload(historicDisease, organizations);
+		const payload = buildChapPayload(historicDisease, organizations, populations);
 
 		const modelPrediction = new ModelPredictionUsingChap(chapUrl, logger);
 
