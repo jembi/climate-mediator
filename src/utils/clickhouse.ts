@@ -205,89 +205,41 @@ export async function insertFromS3Json(
 }
 
 export async function createHistoricalDiseaseTable() {
-  const client = createClient({
-    url,
-    password,
-  });
+  const schema = `organizational_unit String,
+  period String,
+  value Int64`;
+return createGenericTable(
+ 'historical_disease',
+ schema,
+ 'organizational_unit'
+);
+}
 
-  try {
-    const existsResult = await client.query({
-      query: `desc historical_disease`,
-    });
-    logger.info(`Table historical_disease already exists`);
-    await client.close();
-    return false;
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('Table') && (error.message.includes('not found') || error.message.includes('does not exist'))) {
-      logger.debug('Table historical_disease does not exist');
-    } else {
-      logger.error('Error checking if historical_disease table exists:');
-      logger.error(error);
-      await client.close();
-      return false;
-    }
-  }
-
-  try {
-    logger.debug('Now creating table');
-    await client.query({
-      query: `
-                CREATE TABLE IF NOT EXISTS historical_disease (
-                    organizational_unit String,
-                    period String,
-                    value Int64
-                ) ENGINE = MergeTree()
-                ORDER BY (organizational_unit)
-            `,
-    });
-    logger.debug('historical_disease table created successfully');
-  } catch (error) {
-    logger.error("There was an issue creating the table in clickhouse: " + JSON.stringify(error));
-  }
-  return client.close();
+export async function createOrganizationsTable() {
+  const schema = `code String,
+     name String,
+     level String,
+     type String,
+     latitude Float32,
+     longitude Float32,
+     coordinates Array(Array(Float32)),
+     timestamp UInt64`;
+  return createGenericTable(
+    'organizations',
+    schema,
+    'name'
+  );
 }
 
 export async function createPopulationTable() {
-  const client = createClient({
-    url,
-    password,
-  }); 
-
-  try {
-    const existsResult = await client.query({
-      query: `desc population_data`,
-    });
-    logger.info(`Table population_data already exists`);
-    await client.close();
-    return false;
-  } catch (error) {
-    if (error instanceof Error && (error.message.includes('Table') && (error.message.includes('not found') || error.message.includes('does not exist')))) {
-      logger.debug('Table population_data does not exist');
-    } else {
-      logger.error('Error checking if population_data table exists:');
-      logger.error(error);
-      await client.close();
-      return false;
-    }
-  }
-
-  try {
-    logger.debug('Now creating table');
-    await client.query({
-      query: `
-        CREATE TABLE IF NOT EXISTS population_data (
-          organizational_unit String,
-          period String,
-          value UInt64
-        ) ENGINE = MergeTree()
-        ORDER BY (organizational_unit)
-      `,
-    });
-    logger.debug('population_data table created successfully');
-  } catch (error) {
-    logger.error("There was an issue creating the table in clickhouse: " + JSON.stringify(error));
-  }
-  return client.close();
+  const schema = `organizational_unit String,
+     period String,
+     value Int64`;  
+  return createGenericTable(
+    'population_data',
+    schema,
+    'organizational_unit'
+  );
 }
 
 export async function insertHistoricDiseaseData(
@@ -429,70 +381,6 @@ export async function insertOrganizationIntoTable(
   }
 }
 
-export async function createOrganizationsTable() {
-  const tableNameOrganizations = 'organizations';
-
-  logger.info(`Creating Organizations table from JSON ${tableNameOrganizations}`);
-
-  const client = createClient({
-    url,
-    password,
-  });
-
-  //check if the table exists
-  try {
-    const existsResult = await client.query({
-      query: `desc ${tableNameOrganizations}`,
-    });
-    logger.info(`Table ${tableNameOrganizations} already exists`);
-    await client.close();
-    return false;
-  } catch (error) {
-    if (error instanceof Error && (error.message.includes('Table') && (error.message.includes('not found') || error.message.includes('does not exist')))) {
-      logger.debug(`Table ${tableNameOrganizations} does not exist`);
-    } else {
-      logger.error(`Error checking if ${tableNameOrganizations} table exists:`);
-      logger.error(error);
-      await client.close();
-      return false;
-    }
-  }
-
-  try {
-    
-    const query = `
-      CREATE TABLE IF NOT EXISTS \`default\`.${tableNameOrganizations}
-      ( code String,
-       name String,
-       level String,
-       type String,
-       latitude Float32,
-       longitude Float32,
-       coordinates Array(Array(Float32)),
-       timestamp UInt64
-      )
-      ENGINE = ReplacingMergeTree(timestamp)
-      ORDER BY name
-    `;
-
-    logger.info(query);
-
-    const res = await client.query({ query });
-
-    logger.info(`Successfully created table from JSON ${tableNameOrganizations}`);
-    logger.info(res);
-
-    await client.close();
-
-    return true;
-  } catch (err) {
-    logger.error(`Error creating table from JSON ${tableNameOrganizations}`);
-    logger.error(err);
-    return false;
-  }
-  
-}
-
 export interface ClickhouseOrganzation {
   code: string;
   name: string;
@@ -591,5 +479,65 @@ export async function fetchPopulationData() {
     logger.error('Error fetching populiation_data');
     logger.error(err);
     throw err;
+  }
+}
+
+/**
+ * Generic function to create a table in ClickHouse
+ * 
+ * @param tableName Name of the table to create
+ * @param schema SQL schema definition for the table columns
+ * @param orderBy Column(s) to order the table by
+ * @param engine Table engine (defaults to MergeTree)
+ * @returns Promise<boolean> True if table was created, false otherwise
+ */
+export async function createGenericTable(
+  tableName: string,
+  schema: string,
+  orderBy: string,
+  engine: string = 'MergeTree'
+): Promise<boolean> {
+  const client = createClient({
+    url,
+    password,
+  });
+
+  try {
+    const existsResult = await client.query({
+      query: `desc ${tableName}`,
+    });
+    logger.info(`Table ${tableName} already exists`);
+    await client.close();
+    return false;
+  } catch (error) {
+    if (error instanceof Error && 
+        error.message.includes('Table') && 
+        (error.message.includes('not found') || error.message.includes('does not exist'))) {
+      logger.debug(`Table ${tableName} does not exist`);
+    } else {
+      logger.error(`Error checking if ${tableName} table exists:`);
+      logger.error(error);
+      await client.close();
+      return false;
+    }
+  }
+
+  try {
+    logger.debug(`Now creating table ${tableName}`);
+    await client.query({
+      query: `
+        CREATE TABLE IF NOT EXISTS ${tableName} (
+          ${schema}
+        ) ENGINE = ${engine}()
+        ORDER BY (${orderBy})
+      `,
+    });
+    logger.debug(`${tableName} table created successfully`);
+    return true;
+  } catch (error) {
+    logger.error(`There was an issue creating the table ${tableName} in clickhouse: ${JSON.stringify(error)}`);
+    return false;
+  } finally {
+    await client.close();
   }
 }

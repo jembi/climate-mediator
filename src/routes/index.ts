@@ -12,7 +12,7 @@ import removePrefixMiddleWare from '../middleware/remove-prefix';
 import { registerBucket } from '../openhim/openhim';
 import { ModelPredictionUsingChap } from '../services/ModelPredictionUsingChap';
 import { buildChapPayload } from '../utils/chap';
-import { createOrganizationsTable, fetchHistoricalDisease, fetchOrganizations, fetchPopulationData, insertHistoricDiseaseData, insertOrganizationIntoTable, insertPopulationData } from '../utils/clickhouse';
+import { fetchHistoricalDisease, fetchOrganizations, fetchPopulationData, insertHistoricDiseaseData, insertOrganizationIntoTable, insertPopulationData } from '../utils/clickhouse';
 import {
   extractHistoricData,
   extractPopulationData,
@@ -116,9 +116,7 @@ const handleJsonPayload = async (file: Express.Multer.File, json: Object, bucket
       bucket,
       file.mimetype
     );
-  
-    await createOrganizationsTable();
-    
+
     await insertOrganizationIntoTable(file.buffer.toString());
    
     return uploadResult.success
