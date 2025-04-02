@@ -52,3 +52,5 @@ app.listen(getConfig().port, async () => {
     logger.info('Running in testing mode, skipping mediator setup');
   }
 });
+
+export default app;
