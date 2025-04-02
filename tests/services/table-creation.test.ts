@@ -3,7 +3,7 @@ import { getCsvHeaders } from '../../src/utils/file-validators';
 import { createTable, generateDDL } from '../../src/utils/clickhouse';
 
 describe('Create Tables based on files', function () {
-  this.timeout(60_000);
+  // this.timeout(60_000);
 
   it('should extract columns based on a csv file (linux - \\n)', async () => {
     //arrange
@@ -36,5 +36,12 @@ describe('Create Tables based on files', function () {
     if (!fields) throw new Error('No fields found');
     const result = await createTable(fields, 'test');
     expect(result).to.be.true;
+  });
+
+  it('should fail to create a table based on an invalid csv file', async () => {
+    const csvFile = Buffer.from('');
+    const fields = getCsvHeaders(csvFile) as any;
+    const result = await createTable(fields, 'test');
+    expect(result).to.throws;
   });
 });
