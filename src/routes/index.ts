@@ -308,7 +308,7 @@ routes.post('/predict', upload.single('file'), async (req, res) => {
 		}
 
 		if (!file) {
-			logger.error('No file uploaded');
+			logger.debug('No file uploaded');
 			return res.status(400).json(createErrorResponse('FILE_MISSING', 'No file uploaded'));
 		}
 
@@ -490,17 +490,17 @@ routes.post('/upload', upload.single('file'), async (req, res) => {
     const createBucketIfNotExists = req.query.createBucketIfNotExists === 'true';
 
     if (!file) {
-      logger.error('No file uploaded');
+      logger.debug('No file uploaded');
       return res.status(400).json(createErrorResponse('FILE_MISSING', 'No file uploaded'));
     }
 
     if (!bucket) {
-      logger.error('No bucket provided');
+      logger.debug('No bucket provided');
       return res.status(400).json(createErrorResponse('BUCKET_MISSING', 'No bucket provided'));
     }
 
     if (!validateBucketName(bucket)) {
-      logger.error(`Invalid bucket name ${bucket}`);
+      logger.debug(`Invalid bucket name ${bucket}`);
       return res
         .status(400)
         .json(

@@ -18,7 +18,7 @@ jobs:
         run: docker compose up -d
       
       - name: Run tests
-        run: npm run test
+        run: NODE_ENV=test npm run test
       
       - name: Tear down services
         if: always()
