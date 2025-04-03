@@ -17,7 +17,7 @@ export async function createTable(fields: string[], tableName: string) {
 
   try {
     logger.debug(`Checking if table ${normalizedTableName} exists...`);
-     await client.query({
+    await client.query({
       query: `desc ${normalizedTableName}`,
     });
     logger.debug(`Table ${normalizedTableName} exists`);
@@ -208,11 +208,7 @@ export async function createHistoricalDiseaseTable() {
   const schema = `organizational_unit String,
   period String,
   value Int64`;
-return createGenericTable(
- 'historical_disease',
- schema,
- 'organizational_unit'
-);
+  return createGenericTable('historical_disease', schema, 'organizational_unit');
 }
 
 export async function createOrganizationsTable() {
@@ -224,27 +220,17 @@ export async function createOrganizationsTable() {
      longitude Float32,
      coordinates Array(Array(Float32)),
      timestamp UInt64`;
-  return createGenericTable(
-    'organizations',
-    schema,
-    'name'
-  );
+  return createGenericTable('organizations', schema, 'name');
 }
 
 export async function createPopulationTable() {
   const schema = `organizational_unit String,
      period String,
-     value Int64`;  
-  return createGenericTable(
-    'population_data',
-    schema,
-    'organizational_unit'
-  );
+     value Int64`;
+  return createGenericTable('population_data', schema, 'organizational_unit');
 }
 
-export async function insertHistoricDiseaseData(
-  diseaseData: HistoricData[]
-) {
+export async function insertHistoricDiseaseData(diseaseData: HistoricData[]) {
   const client = createClient({
     url,
     password,
@@ -259,14 +245,14 @@ export async function insertHistoricDiseaseData(
     });
     logger.debug('Insertion successful');
   } catch (error) {
-    logger.error('There was an issue inserting the data into clickhouse: ' + JSON.stringify(error));
+    logger.error(
+      'There was an issue inserting the data into clickhouse: ' + JSON.stringify(error)
+    );
   }
   return client.close();
 }
 
-export async function insertPopulationData(
-  populationData: PopulationData[]
-) {
+export async function insertPopulationData(populationData: PopulationData[]) {
   const client = createClient({
     url,
     password,
@@ -280,24 +266,29 @@ export async function insertPopulationData(
     });
     logger.debug('Insertion successful');
   } catch (error) {
-    logger.error('There was an issue inserting the data into clickhouse: ' + JSON.stringify(error));
+    logger.error(
+      'There was an issue inserting the data into clickhouse: ' + JSON.stringify(error)
+    );
   }
   return client.close();
 }
 
 function isNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
+  return typeof value === 'number' && Number.isFinite(value);
 }
 
-function checkType(feature: any):
-  {type: 'point', latitude: number, longitude: number} |
-  {type: 'polygon', coordinates: [[number, number]]}
-{
+function checkType(
+  feature: any
+):
+  | { type: 'point'; latitude: number; longitude: number }
+  | { type: 'polygon'; coordinates: [[number, number]] } {
   const type = feature?.geometry?.type?.toLowerCase();
 
   if (type == 'point') {
-    if (Array.isArray(feature?.geometry?.coordinates) &&
-        feature.geometry.coordinates.every(isNumber)) {
+    if (
+      Array.isArray(feature?.geometry?.coordinates) &&
+      feature.geometry.coordinates.every(isNumber)
+    ) {
       return {
         type: 'point',
         latitude: feature.geometry.coordinates[1],
@@ -307,10 +298,12 @@ function checkType(feature: any):
   }
 
   if (type == 'polygon') {
-    if (Array.isArray(feature?.geometry?.coordinates?.[0]) &&
-        feature.geometry.coordinates?.[0].every(Array.isArray)) {
+    if (
+      Array.isArray(feature?.geometry?.coordinates?.[0]) &&
+      feature.geometry.coordinates?.[0].every(Array.isArray)
+    ) {
       return {
-        type : 'polygon',
+        type: 'polygon',
         coordinates: feature.geometry.coordinates[0] as any,
       };
     }
@@ -330,9 +323,7 @@ export async function setupClickhouseTables() {
   }
 }
 
-export async function insertOrganizationIntoTable(
-  payload: string,
-) {
+export async function insertOrganizationIntoTable(payload: string) {
   const client = createClient({
     url,
     password,
@@ -367,8 +358,8 @@ export async function insertOrganizationIntoTable(
       format: 'JSONEachRow',
       clickhouse_settings: {
         optimize_on_insert: 1,
-      }
-    })
+      },
+    });
 
     logger.info(`Successfully inserted data into ${normalizedTableName}`);
     return true;
@@ -404,7 +395,6 @@ export interface ClickhousePopulationData {
   value: number;
 }
 
-
 export async function fetchOrganizations() {
   const client = createClient({
     url,
@@ -417,10 +407,9 @@ export async function fetchOrganizations() {
       FROM default.organizations
     `;
 
-    const res = await (await client.query({ query})).json();
+    const res = await (await client.query({ query })).json();
 
     return res.data as ClickhouseOrganzation[];
-
   } catch (err) {
     logger.error('Error fetching organizations');
     logger.error(err);
@@ -442,10 +431,9 @@ export async function fetchHistoricalDisease() {
       
     `;
 
-    const res = await (await client.query({ query})).json();
+    const res = await (await client.query({ query })).json();
 
     return res.data as ClickhouseHistoricalDisease[];
-
   } catch (err) {
     logger.error('Error fetching historical_disease');
     logger.error(err);
@@ -471,10 +459,9 @@ export async function fetchPopulationData() {
       
     `;
 
-    const res = await (await client.query({ query})).json();
+    const res = await (await client.query({ query })).json();
 
     return res.data as ClickhousePopulationData[];
-
   } catch (err) {
     logger.error('Error fetching populiation_data');
     logger.error(err);
@@ -484,7 +471,7 @@ export async function fetchPopulationData() {
 
 /**
  * Generic function to create a table in ClickHouse
- * 
+ *
  * @param tableName Name of the table to create
  * @param schema SQL schema definition for the table columns
  * @param orderBy Column(s) to order the table by
@@ -510,9 +497,11 @@ export async function createGenericTable(
     await client.close();
     return false;
   } catch (error) {
-    if (error instanceof Error && 
-        error.message.includes('Table') && 
-        (error.message.includes('not found') || error.message.includes('does not exist'))) {
+    if (
+      error instanceof Error &&
+      error.message.includes('Table') &&
+      (error.message.includes('not found') || error.message.includes('does not exist'))
+    ) {
       logger.debug(`Table ${tableName} does not exist`);
     } else {
       logger.error(`Error checking if ${tableName} table exists:`);
@@ -535,7 +524,9 @@ export async function createGenericTable(
     logger.debug(`${tableName} table created successfully`);
     return true;
   } catch (error) {
-    logger.error(`There was an issue creating the table ${tableName} in clickhouse: ${JSON.stringify(error)}`);
+    logger.error(
+      `There was an issue creating the table ${tableName} in clickhouse: ${JSON.stringify(error)}`
+    );
     return false;
   } finally {
     await client.close();

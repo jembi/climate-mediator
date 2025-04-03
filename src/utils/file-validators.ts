@@ -1,12 +1,12 @@
-import { PredictionPayload } from "./prediction-payload";
+import { PredictionPayload } from './prediction-payload';
 
-export interface HistoricData{
+export interface HistoricData {
   organizational_unit: string;
   period: string;
   value: number;
 }
 
-export interface PopulationData{
+export interface PopulationData {
   organizational_unit: string;
   period: string;
   value: number;
@@ -46,16 +46,18 @@ export function validateBucketName(bucket: string): boolean {
   return regex.test(bucket);
 }
 
-export function extractHistoricData(jsonStringified: string): HistoricData[]{
+export function extractHistoricData(jsonStringified: string): HistoricData[] {
   const jsonPayload = JSON.parse(jsonStringified) as PredictionPayload;
-  const diseaseCases = jsonPayload.features.find(feature => feature['featureId'] === 'disease_cases')
-  
-  if(diseaseCases === undefined){
-    throw new Error("Could not find historic disease data within payload");
+  const diseaseCases = jsonPayload.features.find(
+    (feature) => feature['featureId'] === 'disease_cases'
+  );
+
+  if (diseaseCases === undefined) {
+    throw new Error('Could not find historic disease data within payload');
   }
 
-  const {data} = diseaseCases;
-  const historicData = data.map((datum: {ou: string, pe: string, value: number}) => ({
+  const { data } = diseaseCases;
+  const historicData = data.map((datum: { ou: string; pe: string; value: number }) => ({
     organizational_unit: datum.ou,
     period: datum.pe,
     value: datum.value,
@@ -63,16 +65,18 @@ export function extractHistoricData(jsonStringified: string): HistoricData[]{
   return historicData;
 }
 
-export function extractPopulationData(jsonStringified: string): PopulationData[]{
+export function extractPopulationData(jsonStringified: string): PopulationData[] {
   const jsonPayload = JSON.parse(jsonStringified) as PredictionPayload;
-  const populationDatas = jsonPayload.features.find(feature => feature['featureId'] === 'population')
+  const populationDatas = jsonPayload.features.find(
+    (feature) => feature['featureId'] === 'population'
+  );
 
-  if(populationDatas === undefined){ 
-    throw new Error("Could not find population data within payload");
+  if (populationDatas === undefined) {
+    throw new Error('Could not find population data within payload');
   }
 
-  const {data} = populationDatas;
-  const populationData = data.map((datum: {ou: string, pe: string, value: number}) => ({
+  const { data } = populationDatas;
+  const populationData = data.map((datum: { ou: string; pe: string; value: number }) => ({
     organizational_unit: datum.ou,
     period: datum.pe,
     value: datum.value,
