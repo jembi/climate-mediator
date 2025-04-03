@@ -15,7 +15,7 @@ jobs:
 
       # Start Docker Compose services
       - name: Start services with Docker Compose
-        run: docker compose up -d
+        run: docker compose up clickhouse -d
       
       - name: Run tests
         run: NODE_ENV=test npm run test

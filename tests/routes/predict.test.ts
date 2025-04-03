@@ -81,8 +81,8 @@ describe('POST /synthetic-predict',function() {
 
         expect(res.body).to.have.property('status', 'error');
         expect(res.body).to.have.property('message', 'No file uploaded');
-        expect(loggerErrorStub.calledWith('No file uploaded')).to.be.true;
-    });
+        expect(res.body).to.have.property('code','FILE_MISSING');
+        });
 
     it('should process valid CSV files and return 201', async () => {
         const sandbox = sinon.createSandbox();

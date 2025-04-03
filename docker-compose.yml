@@ -5,26 +5,29 @@ services:
       - 9000:9000
       - 9001:9001
     command: server /data --console-address ":9001"
-    network_mode: host
+    networks:
+      - app-network
   
   clickhouse:
     image: clickhouse/clickhouse-server:23.8.14.6
     ports:
-      - 8123:8123
+      - 8124:8123
       - 9002:9000
     environment:
       - CLICKHOUSE_PASSWORD=dev_password_only
-    network_mode: host
+    networks:
+      - app-network
 
   openhim-console:
     image: jembi/openhim-console:v1.18.2
     ports:
-      - 80:80
+      - 9001:80
     networks:
       - openhim
+      - app-network
 
   openhim-core:
-    image: jembi/openhim-core:v8.5.1
+    image: jembi/openhim-core:latest
     environment:
       - mongo_url=mongodb://mongo-db:27017/openhim
     ports:
@@ -33,6 +36,7 @@ services:
       - 5001:5001
     networks:
       - openhim
+      - app-network
 
   mongo-db:
     container_name: mongo-db
@@ -41,7 +45,9 @@ services:
       - 27017:27017
     networks:
       - openhim
+      - app-network
     restart: unless-stopped
 
 networks:
   openhim:
+  app-network:

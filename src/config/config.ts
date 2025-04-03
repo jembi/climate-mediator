@@ -23,7 +23,7 @@ export const getConfig = () => {
     openhimTransactionUrl: process.env.OPENHIM_TRANSACTION_URL || 'http://localhost:5001',
     openhimClientToken: process.env.OPENHIM_CLIENT_CUSTOM_TOKEN || 'test',
     trustSelfSigned: process.env.TRUST_SELF_SIGNED === 'false' ? false : true,
-    runningMode: process.env.MODE || '',
+    runningMode: process.env.MODE || 'testing',
     bodySizeLimit: process.env.BODY_SIZE_LIMIT || '50mb',
     chapCliApiUrl: process.env.CHAP_CLI_API_URL,
     minio: {
@@ -39,7 +39,7 @@ export const getConfig = () => {
       suffix: process.env.MINIO_SUFFIX || '',
     },
     clickhouse: {
-      url: process.env.CLICKHOUSE_URL || 'http://localhost:8123',
+      url: process.env.CLICKHOUSE_URL || 'http://localhost:8124',
       user: process.env.CLICKHOUSE_USER || '',
       password: process.env.CLICKHOUSE_PASSWORD || 'dev_password_only',
     },

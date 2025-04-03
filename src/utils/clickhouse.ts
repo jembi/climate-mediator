@@ -17,7 +17,7 @@ export async function createTable(fields: string[], tableName: string) {
 
   try {
     logger.debug(`Checking if table ${normalizedTableName} exists...`);
-    const existsResult = await client.query({
+     await client.query({
       query: `desc ${normalizedTableName}`,
     });
     logger.debug(`Table ${normalizedTableName} exists`);
@@ -29,7 +29,7 @@ export async function createTable(fields: string[], tableName: string) {
 
   try {
     logger.debug(`Creating table ${normalizedTableName} with fields ${fields.join(', ')}`);
-    const result = await client.query({
+    await client.query({
       query: generateDDL(fields, normalizedTableName),
     });
     logger.info(`Table ${normalizedTableName} created successfully`);
