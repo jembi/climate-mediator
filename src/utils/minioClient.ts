@@ -13,7 +13,7 @@ import {
   createTable,
   createTableFromJson,
   insertFromS3,
-  insertFromS3Json
+  insertFromS3Json,
 } from './clickhouse';
 import { getCsvHeaders, validateJsonFile } from './file-validators';
 
@@ -34,7 +34,7 @@ const { endPoint, port, useSSL, bucketRegion, accessKey, secretKey, buckets, pre
 const registeredBuckets: Set<string> = new Set();
 
 // Create a shared Minio client instance
-const minioClient = new Minio.Client({
+export const minioClient = new Minio.Client({
   endPoint,
   port,
   useSSL,
@@ -82,9 +82,7 @@ export async function ensureBucketExists(
     const exists = await minioClient.bucketExists(bucket);
     if (!exists && createBucketIfNotExists) {
       await minioClient.makeBucket(bucket);
-      logger.info(
-        `Bucket ${bucket} created`
-      );
+      logger.info(`Bucket ${bucket} created`);
     }
 
     await createMinioBucketListeners([bucket]);
@@ -223,7 +221,13 @@ export async function uploadFileBufferToMinio(
       ...customMetadata,
     };
 
-    await minioClient.putObject(bucket, destinationObject, fileBuffer, fileBuffer.length, metaData);
+    await minioClient.putObject(
+      bucket,
+      destinationObject,
+      fileBuffer,
+      fileBuffer.length,
+      metaData
+    );
     const successMessage = `File buffer ${customMetadata} uploaded as object ${destinationObject} in bucket ${bucket}`;
     logger.info(successMessage);
 
@@ -269,7 +273,7 @@ export async function createMinioBucketListeners(listOfBuckets: string[]) {
         try {
           await triggerProcessing(bucket, file, tableName);
         } catch (err) {
-          logger.error('Error triggering processing on OpenHim Console')
+          logger.error('Error triggering processing on OpenHim Console');
         }
 
         await minioClient.fGetObject(bucket, file, `tmp/${file}`);
@@ -288,14 +292,23 @@ export async function createMinioBucketListeners(listOfBuckets: string[]) {
           const groupByColumnName = getFirstField(JSON.parse(fileBuffer.toString()));
 
           // Create table from json
-          await createTableFromJson(minioUrl, { accessKey, secretKey }, tableName, groupByColumnName);
+          await createTableFromJson(
+            minioUrl,
+            { accessKey, secretKey },
+            tableName,
+            groupByColumnName
+          );
 
           // Insert data into clickhouse
           await insertFromS3Json(tableName, minioUrl, {
             accessKey,
             secretKey,
           });
-        } else if (extension === 'csv' && getCsvHeaders(fileBuffer) && !/(training|history|future)\.csv/.test(file)) {
+        } else if (
+          extension === 'csv' &&
+          getCsvHeaders(fileBuffer) &&
+          !/(training|history|future)\.csv/.test(file)
+        ) {
           logger.debug('Inserting csv data to table');
           //get the first line of the csv file
           const fields = (await readFile(`tmp/${file}`, 'utf8')).split('\n')[0].split(',');
@@ -319,7 +332,7 @@ export async function createMinioBucketListeners(listOfBuckets: string[]) {
   }
 }
 
-export async function minioListenerHandler (bucket: string, file: string, tableName: string) {
+export async function minioListenerHandler(bucket: string, file: string, tableName: string) {
   await minioClient.fGetObject(bucket, file, `tmp/${file}`);
 
   const fileBuffer = await readFile(`tmp/${file}`);
@@ -389,10 +402,10 @@ export async function downloadFileAndUpload(bucket: string | undefined) {
       method: 'GET',
       url: bucketDetails.url,
       responseType: 'stream',
-      headers
+      headers,
     });
 
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');;
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 
     const fileUrl = path.join(tmpDir, `${timestamp}-${bucketDetails.fileName}`);
     const writer = createWriteStream(fileUrl);
@@ -400,7 +413,7 @@ export async function downloadFileAndUpload(bucket: string | undefined) {
 
     await new Promise((resolve, reject) => {
       writer.on('finish', () => resolve(1));
-      writer.on('error', error => reject(error));
+      writer.on('error', (error) => reject(error));
     });
 
     await fs.appendFile(fileUrl, '\n');
@@ -422,7 +435,8 @@ export async function downloadFileAndUpload(bucket: string | undefined) {
 }
 
 export function sanitizeBucketName(name: string) {
-  return name.toLowerCase()
+  return name
+    .toLowerCase()
     .replace(/[^a-z0-9-]/g, '')
     .replace(/^-+|-+$/g, '')
     .replace(/\.{2,}/g, '.')

@@ -22,7 +22,7 @@ describe('Config', function () {
     expect(getConfig().openhimUsername).to.equal('root@openhim.org');
     expect(getConfig().openhimPassword).to.equal('instant101');
     expect(getConfig().trustSelfSigned).to.equal(true);
-    expect(getConfig().runningMode).to.equal('');
+    expect(getConfig().runningMode).to.equal('testing');
     expect(getConfig().bodySizeLimit).to.equal('50mb');
   });
 

@@ -6,17 +6,28 @@ import fs from 'fs/promises';
 import multer from 'multer';
 import { getConfig } from '../config/config';
 import { saveToTmp } from '../helpers/files';
-import { createErrorResponse, createSuccessResponse, UploadResponse } from '../helpers/responses';
+import {
+  createErrorResponse,
+  createSuccessResponse,
+  UploadResponse,
+} from '../helpers/responses';
 import logger from '../logger';
 import removePrefixMiddleWare from '../middleware/remove-prefix';
 import { registerBucket } from '../openhim/openhim';
 import { ModelPredictionUsingChap } from '../services/ModelPredictionUsingChap';
 import { buildChapPayload } from '../utils/chap';
-import { fetchHistoricalDisease, fetchOrganizations, fetchPopulationData, insertHistoricDiseaseData, insertOrganizationIntoTable, insertPopulationData } from '../utils/clickhouse';
+import {
+  fetchHistoricalDisease,
+  fetchOrganizations,
+  fetchPopulationData,
+  insertHistoricDiseaseData,
+  insertOrganizationIntoTable,
+  insertPopulationData,
+} from '../utils/clickhouse';
 import {
   extractHistoricData,
   extractPopulationData,
-  validateBucketName
+  validateBucketName,
 } from '../utils/file-validators';
 import {
   BucketDoesNotExistError,
@@ -108,7 +119,11 @@ const handleJsonFile = async (
   }
 };
 
-const handleJsonPayload = async (file: Express.Multer.File, json: Object, bucket: string): Promise<UploadResponse> => {
+const handleJsonPayload = async (
+  file: Express.Multer.File,
+  json: Object,
+  bucket: string
+): Promise<UploadResponse> => {
   try {
     const uploadResult = await uploadFileBufferToMinio(
       Buffer.from(JSON.stringify(json)),
@@ -118,7 +133,7 @@ const handleJsonPayload = async (file: Express.Multer.File, json: Object, bucket
     );
 
     await insertOrganizationIntoTable(file.buffer.toString());
-   
+
     return uploadResult.success
       ? createSuccessResponse('UPLOAD_SUCCESS', uploadResult.message)
       : createErrorResponse('UPLOAD_FAILED', uploadResult.message);
@@ -147,10 +162,7 @@ routes.post('/synthetic-predict', async (req, res) => {
       return res
         .status(500)
         .json(
-          createErrorResponse(
-            'UPLOAD_FAILED',
-            'Request Exceeds the Maximum Count of Files'
-          )
+          createErrorResponse('UPLOAD_FAILED', 'Request Exceeds the Maximum Count of Files')
         );
     }
 
@@ -298,86 +310,85 @@ async function getPrediction(
 }
 
 routes.post('/predict', upload.single('file'), async (req, res) => {
-	try {
-		const file = req.file;
-		const chapUrl = process.env.CHAP_URL;
+  try {
+    const file = req.file;
+    const chapUrl = process.env.CHAP_URL;
 
-		if (!chapUrl) {
-			logger.error('Chap URL not set');
-			return res.status(500).json(createErrorResponse('ENV_MISSING', 'Chap URL not set'));
-		}
+    if (!chapUrl) {
+      logger.error('Chap URL not set');
+      return res.status(500).json(createErrorResponse('ENV_MISSING', 'Chap URL not set'));
+    }
 
-		if (!file) {
-			logger.error('No file uploaded');
-			return res.status(400).json(createErrorResponse('FILE_MISSING', 'No file uploaded'));
-		}
+    if (!file) {
+      logger.debug('No file uploaded');
+      return res.status(400).json(createErrorResponse('FILE_MISSING', 'No file uploaded'));
+    }
 
-		try {
-			const historicData = extractHistoricData(file.buffer.toString());
-			await insertHistoricDiseaseData(historicData);
+    try {
+      const historicData = extractHistoricData(file.buffer.toString());
+      await insertHistoricDiseaseData(historicData);
       const populationData = extractPopulationData(file.buffer.toString());
       await insertPopulationData(populationData);
-		} catch (error) {
-			logger.error('There was an issue inserting the Historic Data: ' + JSON.stringify(error));
-		}
+    } catch (error) {
+      logger.error('There was an issue inserting the Historic Data: ' + JSON.stringify(error));
+    }
 
-		const modelPrediction = new ModelPredictionUsingChap(chapUrl, logger);
+    const modelPrediction = new ModelPredictionUsingChap(chapUrl, logger);
 
-		// start the Chap prediction job
-		const predictResponse = await modelPrediction.predict({ data: file.buffer.toString() });
+    // start the Chap prediction job
+    const predictResponse = await modelPrediction.predict({ data: file.buffer.toString() });
 
-		if (predictResponse?.status === 'success') {
-			// wait for the prediction job to finish
-			const predictionResults = (await new Promise((resolve, reject) => {
-				const interval = setInterval(async () => {
-					const statusResponse = await modelPrediction.getStatus();
-					if (statusResponse?.status === 'idle' && statusResponse?.ready) {
-						clearInterval(interval);
-						resolve((await modelPrediction.getResult()).data);
-					}
-				}, 250);
-			})) as any;
+    if (predictResponse?.status === 'success') {
+      // wait for the prediction job to finish
+      const predictionResults = (await new Promise((resolve, reject) => {
+        const interval = setInterval(async () => {
+          const statusResponse = await modelPrediction.getStatus();
+          if (statusResponse?.status === 'idle' && statusResponse?.ready) {
+            clearInterval(interval);
+            resolve((await modelPrediction.getResult()).data);
+          }
+        }, 250);
+      })) as any;
 
-			// get organization code
-			const orgCode = JSON.parse(file.buffer.toString())?.orgUnitsGeoJson.features[0].properties.code;
+      // get organization code
+      const orgCode = JSON.parse(file.buffer.toString())?.orgUnitsGeoJson.features[0]
+        .properties.code;
 
-			const bucketName = sanitizeBucketName(
-				`${file.originalname.split('.')[0]}`
-			);
+      const bucketName = sanitizeBucketName(`${file.originalname.split('.')[0]}`);
 
-			const predictionResultsForMinio = predictionResults?.dataValues?.map((d: any) => {
-				return {
-					...d,
-					orgCode: orgCode ?? undefined,
-					diseaseId: predictionResults.diseaseId as string,
-				};
-			});
+      const predictionResultsForMinio = predictionResults?.dataValues?.map((d: any) => {
+        return {
+          ...d,
+          orgCode: orgCode ?? undefined,
+          diseaseId: predictionResults.diseaseId as string,
+        };
+      });
 
-			await ensureBucketExists(bucketName, true);
+      await ensureBucketExists(bucketName, true);
 
-			await handleJsonPayload(file, predictionResultsForMinio, bucketName);
+      await handleJsonPayload(file, predictionResultsForMinio, bucketName);
 
-			return res.status(200).json(predictionResultsForMinio);
-		}
+      return res.status(200).json(predictionResultsForMinio);
+    }
 
-		return res
-			.status(500)
-			.json({ error: 'Error predicting model. Error response from Chap API' });
-	} catch (err) {
-		logger.error('Error predicting model:');
-		logger.error(err);
-		return res.status(500).json({ error: 'An unexpected error has occured' });
-	}
+    return res
+      .status(500)
+      .json({ error: 'Error predicting model. Error response from Chap API' });
+  } catch (err) {
+    logger.error('Error predicting model:');
+    logger.error(err);
+    return res.status(500).json({ error: 'An unexpected error has occured' });
+  }
 });
 
 routes.get('/predict-inverse', async (req, res) => {
-	try {
-		const chapUrl = process.env.CHAP_URL;
+  try {
+    const chapUrl = process.env.CHAP_URL;
 
-		if (!chapUrl) {
-			logger.error('Chap URL not set');
-			return res.status(500).json(createErrorResponse('ENV_MISSING', 'Chap URL not set'));
-		}
+    if (!chapUrl) {
+      logger.error('Chap URL not set');
+      return res.status(500).json(createErrorResponse('ENV_MISSING', 'Chap URL not set'));
+    }
 
     const organizations = await fetchOrganizations();
     const historicDisease = await fetchHistoricalDisease();
@@ -387,57 +398,62 @@ routes.get('/predict-inverse', async (req, res) => {
       return res.status(500).json({ error: 'No data found in Clickhouse' });
     }
 
-		const payload = buildChapPayload(historicDisease, organizations, populations);
+    const payload = buildChapPayload(historicDisease, organizations, populations);
 
-		const modelPrediction = new ModelPredictionUsingChap(chapUrl, logger);
+    const modelPrediction = new ModelPredictionUsingChap(chapUrl, logger);
 
-		// start the Chap prediction job
-		const predictResponse = await modelPrediction.predict({ data: payload });
+    // start the Chap prediction job
+    const predictResponse = await modelPrediction.predict({ data: payload });
 
-		if (predictResponse?.status === 'success') {
-			// wait for the prediction job to finish
-			const predictionResults = (await new Promise((resolve, reject) => {
-				const interval = setInterval(async () => {
-					const statusResponse = await modelPrediction.getStatus();
-					if (statusResponse?.status === 'idle' && statusResponse?.ready) {
-						clearInterval(interval);
-						resolve((await modelPrediction.getResult()).data);
-					}
-				}, 333);
-			})) as any;
+    if (predictResponse?.status === 'success') {
+      // wait for the prediction job to finish
+      const predictionResults = (await new Promise((resolve, reject) => {
+        const interval = setInterval(async () => {
+          const statusResponse = await modelPrediction.getStatus();
+          if (statusResponse?.status === 'idle' && statusResponse?.ready) {
+            clearInterval(interval);
+            resolve((await modelPrediction.getResult()).data);
+          }
+        }, 333);
+      })) as any;
 
-			const bucketName = sanitizeBucketName('prediction');
+      const bucketName = sanitizeBucketName('prediction');
       const fileName = new Date().getTime() + '.json';
-			const predictionResultsForMinio = predictionResults?.dataValues?.map((d: any) => {
-				return {
-					...d,
-					diseaseId: predictionResults.diseaseId as string,
-				};
-			});
+      const predictionResultsForMinio = predictionResults?.dataValues?.map((d: any) => {
+        return {
+          ...d,
+          diseaseId: predictionResults.diseaseId as string,
+        };
+      });
 
-			await ensureBucketExists(bucketName, true);
-			const uploadResult = await uploadFileBufferToMinio(
+      await ensureBucketExists(bucketName, true);
+      const uploadResult = await uploadFileBufferToMinio(
         Buffer.from(JSON.stringify(predictionResultsForMinio)),
         fileName,
         bucketName,
-        'application/json',
+        'application/json'
       );
 
       if (uploadResult.success) {
-        return res.status(200).json({ message: 'Prediction results uploaded successfully', results: predictionResultsForMinio  });
+        return res
+          .status(200)
+          .json({
+            message: 'Prediction results uploaded successfully',
+            results: predictionResultsForMinio,
+          });
       } else {
         return res.status(500).json({ message: 'Failed to upload prediction results' });
       }
-		}
+    }
 
-		return res
-			.status(500)
-			.json({ error: 'Error predicting model. Error response from Chap API' });
-	} catch (err) {
-		logger.error('Error predicting model:');
-		logger.error(err);
-		return res.status(500).json({ error: 'An unexpected error has occured' });
-	}
+    return res
+      .status(500)
+      .json({ error: 'Error predicting model. Error response from Chap API' });
+  } catch (err) {
+    logger.error('Error predicting model:');
+    logger.error(err);
+    return res.status(500).json({ error: 'An unexpected error has occured' });
+  }
 });
 
 routes.get('/process-climate-data', async (req, res) => {
@@ -448,7 +464,7 @@ routes.get('/process-climate-data', async (req, res) => {
 
     await minioListenerHandler(bucket, file, tableName);
 
-    return res.status(200).json({bucket, file, tableName, clickhouseInsert: 'Success'});
+    return res.status(200).json({ bucket, file, tableName, clickhouseInsert: 'Success' });
   } catch (e) {
     return res
       .status(500)
@@ -469,7 +485,7 @@ routes.get('/download-climate-data', async (req, res) => {
 
     await downloadFileAndUpload(bucket as string);
 
-    return res.status(200).json({download: 'success', upload: 'success'});
+    return res.status(200).json({ download: 'success', upload: 'success' });
   } catch (e) {
     return res
       .status(500)
@@ -490,17 +506,17 @@ routes.post('/upload', upload.single('file'), async (req, res) => {
     const createBucketIfNotExists = req.query.createBucketIfNotExists === 'true';
 
     if (!file) {
-      logger.error('No file uploaded');
+      logger.debug('No file uploaded');
       return res.status(400).json(createErrorResponse('FILE_MISSING', 'No file uploaded'));
     }
 
     if (!bucket) {
-      logger.error('No bucket provided');
+      logger.debug('No bucket provided');
       return res.status(400).json(createErrorResponse('BUCKET_MISSING', 'No bucket provided'));
     }
 
     if (!validateBucketName(bucket)) {
-      logger.error(`Invalid bucket name ${bucket}`);
+      logger.debug(`Invalid bucket name ${bucket}`);
       return res
         .status(400)
         .json(

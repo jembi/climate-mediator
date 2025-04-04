@@ -1,0 +1,101 @@
+time_period,rainfall,mean_temperature,disease_cases,location
+2023-01,12,24,120,Addis Ababa
+2023-02,15,25,130,Addis Ababa
+2023-03,20,26,150,Addis Ababa
+2023-04,18,27,180,Addis Ababa
+2023-05,10,28,200,Addis Ababa
+2023-06,5,29,160,Addis Ababa
+2023-07,8,30,140,Addis Ababa
+2023-08,12,29,130,Addis Ababa
+2023-09,15,28,150,Addis Ababa
+2023-10,20,27,170,Addis Ababa
+2023-11,18,26,190,Addis Ababa
+2023-12,15,25,180,Addis Ababa
+2024-01,14,24,130,Addis Ababa
+2024-02,16,25,140,Addis Ababa
+2024-03,22,26,160,Addis Ababa
+2024-04,20,27,190,Addis Ababa
+2024-05,12,28,210,Addis Ababa
+2024-06,6,29,170,Addis Ababa
+2024-07,7,30,150,Addis Ababa
+2024-08,10,29,140,Addis Ababa
+2024-09,14,28,160,Addis Ababa
+2024-10,18,27,180,Addis Ababa
+2024-11,16,26,200,Addis Ababa
+2024-12,13,25,190,Addis Ababa
+2025-01,15,25,150,Addis Ababa
+2023-01,5,30,80,Bahir Dar
+2023-02,8,32,90,Bahir Dar
+2023-03,12,33,110,Bahir Dar
+2023-04,10,34,140,Bahir Dar
+2023-05,3,33,160,Bahir Dar
+2023-06,1,32,120,Bahir Dar
+2023-07,2,31,100,Bahir Dar
+2023-08,4,30,90,Bahir Dar
+2023-09,7,31,110,Bahir Dar
+2023-10,9,32,130,Bahir Dar
+2023-11,6,31,150,Bahir Dar
+2023-12,5,30,140,Bahir Dar
+2024-01,6,30,90,Bahir Dar
+2024-02,9,32,100,Bahir Dar
+2024-03,13,33,120,Bahir Dar
+2024-04,11,34,150,Bahir Dar
+2024-05,4,33,170,Bahir Dar
+2024-06,2,32,130,Bahir Dar
+2024-07,3,31,110,Bahir Dar
+2024-08,5,30,100,Bahir Dar
+2024-09,8,31,120,Bahir Dar
+2024-10,10,32,140,Bahir Dar
+2024-11,7,31,160,Bahir Dar
+2024-12,6,30,150,Bahir Dar
+2025-01,7,30,110,Bahir Dar
+2023-01,25,18,200,Mekelle
+2023-02,28,19,210,Mekelle
+2023-03,33,20,230,Mekelle
+2023-04,31,21,260,Mekelle
+2023-05,23,22,280,Mekelle
+2023-06,18,23,240,Mekelle
+2023-07,21,22,220,Mekelle
+2023-08,25,21,210,Mekelle
+2023-09,28,22,230,Mekelle
+2023-10,33,21,250,Mekelle
+2023-11,31,20,270,Mekelle
+2023-12,28,19,260,Mekelle
+2024-01,29,18,210,Mekelle
+2024-02,31,19,220,Mekelle
+2024-03,35,20,240,Mekelle
+2024-04,33,21,270,Mekelle
+2024-05,25,22,290,Mekelle
+2024-06,19,23,250,Mekelle
+2024-07,22,22,230,Mekelle
+2024-08,26,21,220,Mekelle
+2024-09,29,22,240,Mekelle
+2024-10,34,21,260,Mekelle
+2024-11,32,20,280,Mekelle
+2024-12,29,19,270,Mekelle
+2025-01,30,19,230,Mekelle
+2023-01,3,35,50,Arba Minch
+2023-02,5,36,60,Arba Minch
+2023-03,9,37,80,Arba Minch
+2023-04,7,38,110,Arba Minch
+2023-05,1,37,130,Arba Minch
+2023-06,0,36,90,Arba Minch
+2023-07,1,35,70,Arba Minch
+2023-08,2,34,60,Arba Minch
+2023-09,5,35,80,Arba Minch
+2023-10,7,36,100,Arba Minch
+2023-11,4,35,120,Arba Minch
+2023-12,3,34,110,Arba Minch
+2024-01,4,35,60,Arba Minch
+2024-02,6,36,70,Arba Minch
+2024-03,10,37,90,Arba Minch
+2024-04,8,38,120,Arba Minch
+2024-05,2,37,140,Arba Minch
+2024-06,1,36,100,Arba Minch
+2024-07,2,35,80,Arba Minch
+2024-08,3,34,70,Arba Minch
+2024-09,6,35,90,Arba Minch
+2024-10,8,36,110,Arba Minch
+2024-11,5,35,130,Arba Minch
+2024-12,4,34,120,Arba Minch
+2025-01,5,35,80,Arba Minch

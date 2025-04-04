@@ -41,7 +41,6 @@ describe('Create Tables based on files', function () {
   it('should fail to create a table based on an invalid csv file', async () => {
     const csvFile = Buffer.from('');
     const fields = getCsvHeaders(csvFile) as any;
-    const result = await createTable(fields, 'test');
-    expect(result).to.throws;
+    expect(() => createTable(fields, 'test')).to.throw;
   });
 });

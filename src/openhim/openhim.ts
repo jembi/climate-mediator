@@ -16,7 +16,7 @@ const {
   trustSelfSigned,
   runningMode,
   openhimTransactionUrl,
-  openhimClientToken
+  openhimClientToken,
 } = getConfig();
 
 const mediatorConfigFilePath = path.resolve(__dirname, './mediatorConfig.json');
@@ -82,7 +82,7 @@ export const setupMediator = async () => {
   }
 };
 
-let Config: any
+let Config: any;
 export const getOpenhimConfig = () => Config;
 
 /**
@@ -160,15 +160,15 @@ export async function getMediatorConfig(): Promise<MediatorConfig | null> {
 }
 
 // Triggers the processing of the climate data onces its received on the minio bucket
-export async function triggerProcessing (bucket: string, file: string, tableName: string) {
+export async function triggerProcessing(bucket: string, file: string, tableName: string) {
   await axios({
     url: `${openhimTransactionUrl}/process-climate-data`,
     method: 'GET',
-    params: {bucket, file, tableName},
+    params: { bucket, file, tableName },
     headers: {
-      Authorization: `Custom ${openhimClientToken}`
+      Authorization: `Custom ${openhimClientToken}`,
     },
-  })
+  });
 }
 
 async function putMediatorConfig(mediatorUrn: string, mediatorConfig: MinioBucketsRegistry[]) {
@@ -221,7 +221,7 @@ export async function registerBucket(bucket: string) {
   }
 
   const newBucket = {
-    bucket
+    bucket,
   };
 
   //get the existing buckets from the mediator config
