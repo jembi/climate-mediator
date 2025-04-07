@@ -1,143 +1,152 @@
-const { describe, it, beforeEach, afterEach } = require('mocha');
-const { expect } = require('chai');
-const sinon = require('sinon');
-const { ClickHouseClient } = require('../src/clickhouse'); // Adjust path as needed
+import { createClient } from '@clickhouse/client';
+import { createGenericTable } from '../../src/utils/clickhouse';
+import { getConfig } from '../../src/config/config';
+import logger from '../../src/logger';
 
-describe('ClickHouse Functions', () => {
-  let clickhouseClient;
-  let queryStub;
 
+// Mock dependencies
+jest.mock('@clickhouse/client');
+jest.mock('../logger');
+jest.mock('../config/config', () => ({
+  getConfig: jest.fn(() => ({
+    clickhouse: {
+      url: 'http://test-clickhouse:8123',
+      password: 'test-password',
+    },
+  })),
+}));
+
+describe('createGenericTable', () => {
+  // Setup common test variables
+  const mockClient = {
+    query: jest.fn(),
+    close: jest.fn(),
+  };
+  
   beforeEach(() => {
-    // Setup test environment
-    clickhouseClient = new ClickHouseClient();
-    queryStub = sinon.stub(clickhouseClient, 'query');
+    // Reset mocks before each test
+    jest.clearAllMocks();
+    (createClient as jest.Mock).mockReturnValue(mockClient);
   });
 
-  afterEach(() => {
-    // Clean up after each test
-    sinon.restore();
+  it('should return false if table already exists', async () => {
+    // Setup
+    mockClient.query.mockResolvedValueOnce({ rows: [] }); // Table exists response
+    
+    // Execute
+    const result = await createGenericTable(
+      'test_table',
+      'id String, name String',
+      'id'
+    );
+    
+    // Assert
+    expect(result).toBe(false);
+    expect(mockClient.query).toHaveBeenCalledWith({
+      query: 'desc test_table',
+    });
+    expect(mockClient.close).toHaveBeenCalled();
+    expect(logger.info).toHaveBeenCalledWith('Table test_table already exists');
   });
 
-  describe('insertData', () => {
-    it('should insert data successfully', async () => {
-      // Arrange
-      const testData = { id: 1, name: 'Test' };
-      queryStub.resolves({ rows: 1 });
-
-      // Act
-      const result = await clickhouseClient.insertData('test_table', testData);
-
-      // Assert
-      expect(result.rows).to.equal(1);
-      expect(queryStub.calledOnce).to.be.true;
-      expect(queryStub.firstCall.args[0]).to.include('INSERT INTO test_table');
+  it('should create a table successfully if it does not exist', async () => {
+    // Setup
+    mockClient.query.mockRejectedValueOnce(new Error('Table not found')); // Table doesn't exist
+    mockClient.query.mockResolvedValueOnce({}); // Table creation succeeds
+    
+    // Execute
+    const result = await createGenericTable(
+      'test_table',
+      'id String, name String',
+      'id'
+    );
+    
+    // Assert
+    expect(result).toBe(true);
+    expect(mockClient.query).toHaveBeenCalledTimes(2);
+    expect(mockClient.query).toHaveBeenNthCalledWith(1, {
+      query: 'desc test_table',
     });
-
-    it('should handle insertion errors', async () => {
-      // Arrange
-      const testData = { id: 1, name: 'Test' };
-      queryStub.rejects(new Error('Database error'));
-
-      // Act & Assert
-      try {
-        await clickhouseClient.insertData('test_table', testData);
-        expect.fail('Should have thrown an error');
-      } catch (error) {
-        expect(error.message).to.equal('Database error');
-      }
+    expect(mockClient.query).toHaveBeenNthCalledWith(2, {
+      query: expect.stringContaining('CREATE TABLE IF NOT EXISTS test_table'),
     });
+    expect(logger.debug).toHaveBeenCalledWith('Table test_table does not exist');
+    expect(logger.debug).toHaveBeenCalledWith('test_table table created successfully');
   });
 
-  describe('queryData', () => {
-    it('should retrieve data successfully', async () => {
-      // Arrange
-      const expectedData = [{ id: 1, name: 'Test' }];
-      queryStub.resolves({ rows: expectedData });
-
-      // Act
-      const result = await clickhouseClient.queryData('SELECT * FROM test_table');
-
-      // Assert
-      expect(result.rows).to.deep.equal(expectedData);
-      expect(queryStub.calledOnce).to.be.true;
-      expect(queryStub.firstCall.args[0]).to.equal('SELECT * FROM test_table');
-    });
-
-    it('should handle query errors', async () => {
-      // Arrange
-      queryStub.rejects(new Error('Query error'));
-
-      // Act & Assert
-      try {
-        await clickhouseClient.queryData('SELECT * FROM test_table');
-        expect.fail('Should have thrown an error');
-      } catch (error) {
-        expect(error.message).to.equal('Query error');
-      }
-    });
-  });
-
-  describe('deleteData', () => {
-    it('should delete data successfully', async () => {
-      // Arrange
-      const condition = "id = 1";
-      queryStub.resolves({ rows: 1 });
-
-      // Act
-      const result = await clickhouseClient.deleteData('test_table', condition);
-
-      // Assert
-      expect(result.rows).to.equal(1);
-      expect(queryStub.calledOnce).to.be.true;
-      expect(queryStub.firstCall.args[0]).to.include('ALTER TABLE test_table DELETE WHERE');
-      expect(queryStub.firstCall.args[0]).to.include(condition);
-    });
-
-    it('should handle deletion errors', async () => {
-      // Arrange
-      const condition = "id = 1";
-      queryStub.rejects(new Error('Deletion error'));
-
-      // Act & Assert
-      try {
-        await clickhouseClient.deleteData('test_table', condition);
-        expect.fail('Should have thrown an error');
-      } catch (error) {
-        expect(error.message).to.equal('Deletion error');
-      }
+  it('should use custom engine when provided', async () => {
+    // Setup
+    mockClient.query.mockRejectedValueOnce(new Error('Table does not exist')); // Table doesn't exist
+    mockClient.query.mockResolvedValueOnce({}); // Table creation succeeds
+    
+    // Execute
+    const result = await createGenericTable(
+      'test_table',
+      'id String, name String',
+      'id',
+      'ReplacingMergeTree'
+    );
+    
+    // Assert
+    expect(result).toBe(true);
+    expect(mockClient.query).toHaveBeenNthCalledWith(2, {
+      query: expect.stringContaining('ENGINE = ReplacingMergeTree()'),
     });
   });
 
-  describe('createTable', () => {
-    it('should create table successfully', async () => {
-      // Arrange
-      const tableName = 'new_test_table';
-      const schema = 'id UInt32, name String, created_at DateTime';
-      queryStub.resolves({ rows: 0 });
+  it('should handle errors when checking if table exists', async () => {
+    // Setup
+    const unexpectedError = new Error('Connection failed');
+    mockClient.query.mockRejectedValueOnce(unexpectedError);
+    
+    // Execute
+    const result = await createGenericTable(
+      'test_table',
+      'id String, name String',
+      'id'
+    );
+    
+    // Assert
+    expect(result).toBe(false);
+    expect(logger.error).toHaveBeenCalledWith('Error checking if test_table table exists:');
+    expect(logger.error).toHaveBeenCalledWith(unexpectedError);
+    expect(mockClient.close).toHaveBeenCalled();
+  });
 
-      // Act
-      const result = await clickhouseClient.createTable(tableName, schema);
+  it('should handle errors when creating a table', async () => {
+    // Setup
+    mockClient.query.mockRejectedValueOnce(new Error('Table not found')); // Table doesn't exist
+    const creationError = new Error('Failed to create table');
+    mockClient.query.mockRejectedValueOnce(creationError); // Table creation fails
+    
+    // Execute
+    const result = await createGenericTable(
+      'test_table',
+      'id String, name String',
+      'id'
+    );
+    
+    // Assert
+    expect(result).toBe(false);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('There was an issue creating the table test_table in clickhouse:')
+    );
+    expect(mockClient.close).toHaveBeenCalled();
+  });
 
-      // Assert
-      expect(result.rows).to.equal(0);
-      expect(queryStub.calledOnce).to.be.true;
-      expect(queryStub.firstCall.args[0]).to.include(`CREATE TABLE IF NOT EXISTS ${tableName}`);
-      expect(queryStub.firstCall.args[0]).to.include(schema);
-    });
-
-    it('should handle table creation errors', async () => {
-      // Arrange
-      const tableName = 'new_test_table';
-      const schema = 'id UInt32, name String, created_at DateTime';
-      queryStub.rejects(new Error('Table creation error'));
-
-      // Act & Assert
-      try {
-        await clickhouseClient.createTable(tableName, schema);
-        expect.fail('Should have thrown an error');
-      } catch (error) {
-        expect(error.message).to.equal('Table creation error');
-      }
-    });
+  it('should always close the client connection, even when errors occur', async () => {
+    // Setup
+    mockClient.query.mockRejectedValueOnce(new Error('Table not found')); // Table doesn't exist
+    mockClient.query.mockRejectedValueOnce(new Error('Failed to create table')); // Table creation fails
+    
+    // Execute
+    await createGenericTable(
+      'test_table',
+      'id String, name String',
+      'id'
+    );
+    
+    // Assert
+    expect(mockClient.close).toHaveBeenCalled();
   });
 });
