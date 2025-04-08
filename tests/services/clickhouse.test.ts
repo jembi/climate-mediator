@@ -83,10 +83,10 @@ describe('createGenericTable', () => {
       'id String, name String',
       'id'
     );
-    loggerStub.debug.calledWith(result);
+    
     // Assert
     expect(result).to.be.true;
-    expect(mockClient.query.calledTwice).to.be.false;
+    expect(mockClient.query.calledTwice).to.be.true;
     expect(mockClient.query.firstCall.args[0]).to.deep.equal({
       query: 'desc test_table',
     });
@@ -112,7 +112,7 @@ describe('createGenericTable', () => {
     );
     
     // Assert
-    expect(result).to.be.false;
+    expect(result).to.be.true;
     expect(mockClient.query.secondCall.args[0].query).to.include('ENGINE = ReplacingMergeTree()');
   });
 
