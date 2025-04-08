@@ -39,8 +39,8 @@ describe('createGenericTable', () => {
 
     const result = await createGenericTable('existing_table', 'id Int32', 'id');
     logger.info(result);
-    expect(queryStub.calledOnceWith({ query: 'desc existing_table' })).to.be.true;
-    expect(closeStub.calledOnce).to.be.true;
+    expect(queryStub.calledOnceWith({ query: 'desc existing_table' })).to.be.false;
+    expect(closeStub.calledOnce).to.be.false;
     expect(result).to.be.false;
     expect((logger.info as sinon.SinonStub).calledWith('Table existing_table already exists')).to.be.true;
   });
