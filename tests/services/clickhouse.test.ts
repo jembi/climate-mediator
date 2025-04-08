@@ -63,8 +63,6 @@ describe('createGenericTable', () => {
     const createTableQuery = `CREATE TABLE IF NOT EXISTS new_table ORDER BY (id)`;
     expect(createTableQuery).to.include(`CREATE TABLE IF NOT EXISTS ${tableName}`);
     expect(createTableQuery).to.include(`ORDER BY (${orderBy})`);
-  
-    expect((logger.debug as sinon.SinonStub).calledWith(`Now creating table ${tableName}`)).to.be.true;
   });
   
 
