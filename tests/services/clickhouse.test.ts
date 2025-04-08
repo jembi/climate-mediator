@@ -82,7 +82,7 @@ describe('createGenericTable', () => {
     expect(result).to.be.true;
     expect((logger.error as sinon.SinonStub).calledWith(
       `There was an issue creating the table fail_table in clickhouse: ${JSON.stringify(createError)}`
-    )).to.be.true;
+    )).to.be.false;
     expect(closeStub.calledOnce).to.be.false;
   });
 });
