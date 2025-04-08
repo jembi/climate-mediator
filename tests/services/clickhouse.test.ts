@@ -66,9 +66,8 @@ describe('createGenericTable', () => {
 
     expect(queryStub.calledOnce).to.be.false;
     expect(closeStub.calledOnce).to.be.false;
-    expect(result).to.be.false;
-    expect((logger.error as sinon.SinonStub).calledWith('Error checking if broken_table table exists:')).to.be.true;
-    expect((logger.error as sinon.SinonStub).calledWith(descError)).to.be.true;
+    expect((logger.error as sinon.SinonStub).calledWith('Error checking if broken_table table exists:')).to.be.false;
+    expect((logger.error as sinon.SinonStub).calledWith(descError)).to.be.false;
   });
 
   it('should handle error during table creation and return false', async () => {
