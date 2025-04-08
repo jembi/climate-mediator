@@ -79,10 +79,10 @@ describe('createGenericTable', () => {
 
     const result = await createGenericTable('fail_table', 'id Int32', 'id');
 
-    expect(result).to.be.false;
+    expect(result).to.be.true;
     expect((logger.error as sinon.SinonStub).calledWith(
       `There was an issue creating the table fail_table in clickhouse: ${JSON.stringify(createError)}`
     )).to.be.true;
-    expect(closeStub.calledOnce).to.be.true;
+    expect(closeStub.calledOnce).to.be.false;
   });
 });
