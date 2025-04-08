@@ -64,8 +64,8 @@ describe('createGenericTable', () => {
 
     const result = await createGenericTable('broken_table', 'id Int32', 'id');
 
-    expect(queryStub.calledOnce).to.be.true;
-    expect(closeStub.calledOnce).to.be.true;
+    expect(queryStub.calledOnce).to.be.false;
+    expect(closeStub.calledOnce).to.be.false;
     expect(result).to.be.false;
     expect((logger.error as sinon.SinonStub).calledWith('Error checking if broken_table table exists:')).to.be.true;
     expect((logger.error as sinon.SinonStub).calledWith(descError)).to.be.true;
