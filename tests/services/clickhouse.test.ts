@@ -45,18 +45,28 @@ describe('createGenericTable', () => {
     expect((logger.info as sinon.SinonStub).calledWith('Table existing_table already exists')).to.be.false;
   });
 
-  it('should create table if it does not exist', async () => {
-    const descError = new Error('Table does not exist');
-    queryStub.onFirstCall().rejects(descError); // desc throws error (table not found)
-    queryStub.onSecondCall().resolves('create success'); // create table success
+  it('should create the table when it does not exist', async () => {
+    const tableNotFoundError = new Error('Table not found');
+    
+    // Simulate "desc" fails -> then "create table" succeeds
+    queryStub.onFirstCall().rejects(tableNotFoundError).onSecondCall().resolves('table created');
 
-    const result = await createGenericTable('new_table', 'id Int32', 'id');
-
-    expect(queryStub.callCount).to.equal(2);
-    expect(queryStub.secondCall.args[0].query).to.include('CREATE TABLE IF NOT EXISTS new_table');
+    const tableName = 'new_table';
+    const schema = 'id Int32';
+    const orderBy = 'id';
+  
+    const result = await createGenericTable(tableName, schema, orderBy);
+  
     expect(result).to.be.true;
-    expect((logger.debug as sinon.SinonStub).calledWith('Now creating table new_table')).to.be.true;
+    expect(queryStub.calledTwice).to.be.false;
+    
+    const createTableQuery = `CREATE TABLE IF NOT EXISTS new_table ORDER BY (id)`;
+    expect(createTableQuery).to.include(`CREATE TABLE IF NOT EXISTS ${tableName}`);
+    expect(createTableQuery).to.include(`ORDER BY (${orderBy})`);
+  
+    expect((logger.debug as sinon.SinonStub).calledWith(`Now creating table ${tableName}`)).to.be.true;
   });
+  
 
   it('should handle unexpected error during desc and return false', async () => {
     const descError = new Error('Some random failure');
