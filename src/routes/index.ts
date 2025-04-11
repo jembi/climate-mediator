@@ -482,8 +482,13 @@ routes.get('/download-climate-data', async (req, res) => {
     logger.info('Downloading and uploading of climate data started');
 
     const bucket = req.query.bucket;
-
-    await downloadFileAndUpload(bucket as string);
+    if (!bucket) {
+      return res.status(400).json(createErrorResponse('BUCKET_MISSING', 'No bucket provided'));
+    }
+    const response = await downloadFileAndUpload(bucket as string);
+    if (response?.error && response.error === 'No buckets configured in OpenHIM config') {
+      return res.status(500).json(createErrorResponse('BUCKET_MISSING', response.error));
+    }
 
     return res.status(200).json({ download: 'success', upload: 'success' });
   } catch (e) {
