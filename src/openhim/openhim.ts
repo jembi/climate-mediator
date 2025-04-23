@@ -1,13 +1,14 @@
-import logger from '../logger';
-import { MediatorConfig, MinioBucketsRegistry } from '../types/mediatorConfig';
-import { RequestOptions } from '../types/request';
-import { Config, getConfig } from '../config/config';
 import axios, { AxiosError } from 'axios';
 import https from 'https';
 import { activateHeartbeat, fetchConfig, registerMediator } from 'openhim-mediator-utils';
-import { Bucket, createMinioBucketListeners, ensureBucketExists } from '../utils/minioClient';
 import path from 'path';
+import { Config, getConfig } from '../config/config';
+import logger from '../logger';
+import { MediatorConfig, MinioBucketsRegistry } from '../types/mediatorConfig';
+import { RequestOptions } from '../types/request';
 import { validateBucketName } from '../utils/file-validators';
+import { downloadFileFromUrl, validateUrl } from '../utils/files';
+import { createMinioBucketListeners, ensureBucketExists, uploadFileBufferToMinio } from '../utils/minioClient';
 
 const {
   openhimUsername,
@@ -51,6 +52,7 @@ export const setupMediator = async () => {
     const openhimConfig = resolveOpenhimConfig(mediatorConfig.urn);
 
     await registerMediator(openhimConfig, mediatorConfig, (error: Error) => {
+      console.error({openhimConfig, mediatorConfig})
       if (error) {
         logger.error(`Failed to register mediator: ${JSON.stringify(error)}`);
         throw error;
@@ -74,6 +76,35 @@ export const setupMediator = async () => {
           logger.debug('Received new configs from OpenHIM');
           Config = config.minio_buckets_registry;
           await initializeBuckets(config.minio_buckets_registry);
+
+          for (const bucket of config.minio_buckets_registry) {
+            if (bucket.bucket) {
+              const fileName = bucket.fileName;
+              const url = bucket.url;
+
+              if (!url) {
+                continue;
+              }
+
+              if (!validateUrl(url)) {
+                logger.error(`Invalid URL: ${url} from bucket: ${bucket.bucket}. Cannot download file`);
+                continue;
+              }
+
+              if (!fileName) {
+                logger.error(`File name not provided for bucket: ${bucket.bucket}`);
+                continue;
+              }
+
+              try {
+                const extension = fileName.split('.').at(-1) ?? '.bin';
+                const fileData = await downloadFileFromUrl(url);
+                await uploadFileBufferToMinio(Buffer.from(fileData), fileName, bucket.bucket, extension);
+              } catch (err) {
+                continue;
+              }
+            }
+          }
         });
       });
     });
