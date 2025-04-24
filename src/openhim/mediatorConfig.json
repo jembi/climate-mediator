@@ -64,6 +64,31 @@
           "displayName": "Region (optional)",
           "type": "string",
           "optional": true
+        },
+        {
+          "param": "auth",
+          "displayName": "Authentication Type",
+          "type": "option",
+          "values": ["none", "basic", "bearer_token"],
+          "default": "none"
+        },
+        {
+          "param": "userName",
+          "displayName": "Username",
+          "type": "string",
+          "showIf": "auth === 'basic'"
+        },
+        {
+          "param": "password",
+          "displayName": "Password",
+          "type": "string",
+          "showIf": "auth === 'basic'"
+        },
+        {
+          "param": "token",
+          "displayName": "Bearer Token",
+          "type": "string",
+          "showIf": "auth === 'bearer_token'"
         }
       ]
     }
