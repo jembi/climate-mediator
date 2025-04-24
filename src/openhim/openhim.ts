@@ -81,6 +81,10 @@ export const setupMediator = async () => {
             if (bucket.bucket) {
               const fileName = bucket.fileName;
               const url = bucket.url;
+              const password = bucket.password;
+              const username = bucket.userName;
+
+
 
               if (!url) {
                 continue;
@@ -98,7 +102,11 @@ export const setupMediator = async () => {
 
               try {
                 const extension = fileName.split('.').at(-1) ?? '.bin';
-                const fileData = await downloadFileFromUrl(url);
+                // const fileData = await downloadFileFromUrl(url);
+                const fileData = await downloadFileFromUrl(url, {
+                  username: username,
+                  password: password
+                });
                 await uploadFileBufferToMinio(Buffer.from(fileData), fileName, bucket.bucket, extension);
               } catch (err) {
                 continue;
