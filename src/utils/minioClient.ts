@@ -313,7 +313,7 @@ export async function createMinioBucketListeners(listOfBuckets: string[]) {
           //get the first line of the csv file
           const fields = (await readFile(`tmp/${file}`, 'utf8')).split('\n')[0].split(',');
 
-          await createTable(fields, tableName);
+          await createTable(minioUrl, { accessKey, secretKey }, tableName);
 
           // Insert data into clickhouse
           await insertFromS3(tableName, minioUrl, {
@@ -361,12 +361,10 @@ export async function minioListenerHandler(bucket: string, file: string, tableNa
     //get the first line of the csv file
     const fields = (await readFile(`tmp/${file}`, 'utf8')).split('\n')[0].split(',');
 
-    await createTable(fields, tableName);
-
-    // If running locally and using docker compose, the minio host is 'minio'. This is to allow clickhouse to connect to the minio server
-
     // Construct the S3-style URL for the file
     const minioUrl = `http://${endPoint}:${port}/${bucket}/${file}`;
+
+    await createTable(minioUrl, { accessKey, secretKey }, tableName);
 
     // Insert data into clickhouse
     await insertFromS3(tableName, minioUrl, {
