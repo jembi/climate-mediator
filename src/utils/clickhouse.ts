@@ -439,6 +439,27 @@ export interface ClickhouseHistoricalDisease {
   value: number;
 }
 
+export interface ClickhouseCsvData {
+  woreda: string;
+  year: string;
+  doy: string;
+  wid: string;
+  lat: string;
+  lon: string;
+  elev: string;
+  ndvi: string;
+  savi: string;
+  evi: string;
+  ndwi5: string;
+  ndwi6: string;
+  lst_day: string;
+  lst_night: string;
+  lst_mean: string;
+  totprec: string;
+  pop_at_risk: string;
+  population: string;
+}
+
 export interface ClickhousePopulationData {
   organizational_unit: string;
   period: string;
@@ -514,6 +535,30 @@ export async function fetchPopulationData() {
     return res.data as ClickhousePopulationData[];
   } catch (err) {
     logger.error('Error fetching populiation_data');
+    logger.error(err);
+    throw err;
+  }
+}
+
+export async function fetchCsvData() {
+  try {
+    const client = createClient({
+      url,
+      password,
+    });
+  
+    const query = `
+      SELECT *
+      FROM marvintest5_predictions
+      WHERE woreda = 'Alebuko'
+      ORDER BY year ASC, toInt32(toFloat32(doy)) ASC
+    `;
+
+    const res = await (await client.query({ query })).json();
+
+    return res.data as ClickhouseCsvData[];
+  } catch (err) {
+    logger.error('Error fetching csv data');
     logger.error(err);
     throw err;
   }

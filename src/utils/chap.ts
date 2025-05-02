@@ -8,7 +8,7 @@ export function buildChapPayload(
   historicalDisease: ClickhouseHistoricalDisease[],
   organizations: ClickhouseOrganzation[],
   populations: ClickhousePopulationData[]
-): any {
+) {
   const payload = {
     model_id: 'chap_ewars_monthly',
     features: [

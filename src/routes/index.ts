@@ -17,6 +17,10 @@ import { registerBucket } from '../openhim/openhim';
 import { ModelPredictionUsingChap } from '../services/ModelPredictionUsingChap';
 import { buildChapPayload } from '../utils/chap';
 import {
+  ClickhouseHistoricalDisease,
+  ClickhouseOrganzation,
+  ClickhousePopulationData,
+  fetchCsvData,
   fetchHistoricalDisease,
   fetchOrganizations,
   fetchPopulationData,
@@ -38,6 +42,7 @@ import {
   uploadFileBufferToMinio,
   uploadToMinio,
 } from '../utils/minioClient';
+const _ = require('lodash');
 
 // Constants
 const VALID_MIME_TYPES = ['text/csv', 'application/json'] as const;
@@ -383,7 +388,7 @@ routes.post('/predict', upload.single('file'), async (req, res) => {
 
 routes.get('/predict-inverse', async (req, res) => {
   try {
-    const chapUrl = process.env.CHAP_URL;
+    const chapUrl = process.env.CHAP_URL as string;
 
     if (!chapUrl) {
       logger.error('Chap URL not set');
@@ -399,6 +404,129 @@ routes.get('/predict-inverse', async (req, res) => {
     }
 
     const payload = buildChapPayload(historicDisease, organizations, populations);
+
+    const modelPrediction = new ModelPredictionUsingChap(chapUrl, logger);
+
+    // start the Chap prediction job
+    const predictResponse = await modelPrediction.predict({ data: payload });
+
+    if (predictResponse?.status === 'success') {
+      // wait for the prediction job to finish
+      const predictionResults = (await new Promise((resolve, reject) => {
+        const interval = setInterval(async () => {
+          const statusResponse = await modelPrediction.getStatus();
+          if (statusResponse?.status === 'idle' && statusResponse?.ready) {
+            clearInterval(interval);
+            resolve((await modelPrediction.getResult()).data);
+          }
+        }, 333);
+      })) as any;
+
+      const bucketName = sanitizeBucketName('prediction');
+      const fileName = new Date().getTime() + '.json';
+      const predictionResultsForMinio = predictionResults?.dataValues?.map((d: any) => {
+        return {
+          ...d,
+          diseaseId: predictionResults.diseaseId as string,
+        };
+      });
+
+      await ensureBucketExists(bucketName, true);
+      const uploadResult = await uploadFileBufferToMinio(
+        Buffer.from(JSON.stringify(predictionResultsForMinio)),
+        fileName,
+        bucketName,
+        'application/json'
+      );
+
+      if (uploadResult.success) {
+        return res.status(200).json({
+          message: 'Prediction results uploaded successfully',
+          results: predictionResultsForMinio,
+        });
+      } else {
+        return res.status(500).json({ message: 'Failed to upload prediction results' });
+      }
+    }
+
+    return res
+      .status(500)
+      .json({ error: 'Error predicting model. Error response from Chap API' });
+  } catch (err) {
+    logger.error('Error predicting model:');
+    logger.error(err);
+    return res.status(500).json({ error: 'An unexpected error has occured' });
+  }
+});
+
+routes.get('/predict-from-csv', async (req, res) => {
+  try {
+    const chapUrl = process.env.CHAP_URL as string;
+
+    if (!chapUrl) {
+      logger.error('Chap URL not set');
+      return res.status(500).json(createErrorResponse('ENV_MISSING', 'Chap URL not set'));
+    }
+
+    const csvData = await fetchCsvData();
+
+    const data = csvData.map(data => {
+      // format: yyyyMM
+      const period = formatYearAndDay(Number.parseInt(data.year), Number.parseInt(data.doy));
+
+      const population: ClickhousePopulationData = {
+        organizational_unit: data.woreda,
+        period,
+        // @todo: get correct population value
+        value: Number.parseInt((Math.random() * 100 + 1).toString() || data.population),
+      };
+      const disease: ClickhouseHistoricalDisease = {
+        organizational_unit: data.woreda,
+        period,
+        // @todo: get correct disease value
+        value: Number.parseInt((Math.random() * 100 + 1).toString() || data.pop_at_risk),
+      };
+      const organization: ClickhouseOrganzation = {
+        code: data.wid,
+        name: data.woreda,
+        level: 2,
+        type: 'point',
+        coordinates: [[0, 0]],
+        longitude: +data.lon,
+        latitude: +data.lat,
+        timestamp: new Date().getMilliseconds(),
+      };
+
+      return {
+        population,
+        disease,
+        organization,
+      };
+    }).reduce((prev, curr) => {
+      prev.populations.push(curr.population);
+      prev.historicDiseases.push(curr.disease);
+      prev.organizations.push(curr.organization);
+      
+      return prev;
+    }, {
+      populations: [] as ClickhousePopulationData[],
+      historicDiseases: [] as ClickhouseHistoricalDisease[],
+      organizations: [] as ClickhouseOrganzation[],
+    });
+
+    const { populations, historicDiseases, organizations } = data;
+
+    if (!organizations.length || !historicDiseases.length || !populations.length) {
+      return res.status(500).json({ error: 'No data found in Clickhouse' });
+    }
+
+    const payload = buildChapPayload(
+      mergeObjectsByOuPe(historicDiseases),
+      [organizations[0]],
+      mergeObjectsByOuPe(populations),
+    );
+
+    // return res.status(200).json( payload );
 
     const modelPrediction = new ModelPredictionUsingChap(chapUrl, logger);
 
@@ -556,5 +684,87 @@ routes.post('/upload', upload.single('file'), async (req, res) => {
       );
   }
 });
+
+/**
+ * Formats the year and day of the year into YYYYMM format.
+ *
+ * @param {number} year - The year (e.g., 2012).
+ * @param {number} dayOfYear - The day of the year (e.g., 200).
+ * @returns {string} - The formatted date in YYYYMM format (e.g., 201207). Returns NaN on error.
+ */
+function formatYearAndDay(year: number, dayOfYear: number): string {
+  // Check for invalid input
+  if (typeof year !== 'number' || typeof dayOfYear !== 'number' ||
+      isNaN(year) || isNaN(dayOfYear) ||
+      year < 1 || dayOfYear < 1 || dayOfYear > 366) { //handles leap years
+    throw new Error('Invalid input: year and dayOfYear must be positive numbers.');
+  }
+
+  // Calculate the month.  We'll use a simplified approach, assuming
+  // 366 days max.  For more accurate calculations, especially with
+  // leap years, you'd need a more complex algorithm.
+  let month = Math.floor((dayOfYear - 1) / 30) + 1; // Simplified month calculation.
+
+    // Adjust for months with fewer than 31 days.
+    if (dayOfYear <= 31) {
+        month = 1;
+    } else if (dayOfYear <= 59) { //Up to end of Feb in non-leap year
+        month = 2;
+    }
+    else if (dayOfYear <= 90) { //Up to end of March
+        month = 3;
+    }
+    else if (dayOfYear <= 120) {
+        month = 4;
+    }
+    else if (dayOfYear <= 151) {
+        month = 5;
+    }
+    else if (dayOfYear <= 181) {
+        month = 6;
+    }
+    else if (dayOfYear <= 212) {
+        month = 7;
+    }
+     else if (dayOfYear <= 243) {
+        month = 8;
+    }
+    else if (dayOfYear <= 273) {
+        month = 9;
+    }
+    else if (dayOfYear <= 304) {
+        month = 10;
+    }
+    else if (dayOfYear <= 334) {
+        month = 11;
+    }
+    else {
+        month = 12;
+    }
+
+
+  // Ensure month is two digits
+  const monthString = month.toString().padStart(2, '0');
+
+  // Combine year and month.
+  const result = year.toString() + monthString;
+  return result;
+}
+
+function mergeObjectsByOuPe(data: Array<{organizational_unit: string; period: string; value: number}>) {
+  const res = _.chain(data)
+    .groupBy((item: any) => `${item.period}`) // Group by 'ou' and 'pe'
+    .map((group: any) => _.mergeWith({}, ...group, (objValue: any, srcValue: any) => {
+      // Customizer function to sum 'value' properties.
+      if (_.isNumber(objValue) && _.isNumber(srcValue)) {
+        return objValue + srcValue;
+      }
+      return srcValue; // Default behavior: overwrite other properties.
+    }))
+    .values()    // Convert the resulting object back to an array
+    .value();    // Resolve the lodash chain
+
+  return res;
+}
 
 export default routes;
