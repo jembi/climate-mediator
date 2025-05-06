@@ -462,19 +462,21 @@ routes.get('/predict-inverse', async (req, res) => {
 routes.get('/predict-from-csv', async (req, res) => {
   try {
     const chapUrl = process.env.CHAP_URL as string | undefined;
-    const locations = req.query.locations as string | undefined;
+    const locationsStr = req.query.locations as string | undefined;
 
     if (!chapUrl) {
       logger.error('Chap URL not set');
       return res.status(500).json(createErrorResponse('ENV_MISSING', 'Chap URL not set'));
     }
 
-    if (!locations) {
+    if (!locationsStr) {
       logger.error('Locations not set');
       return res.status(400).json(createErrorResponse('LOCATIONS_MISSING', 'Locations not set'));
     }
 
-    const csvData = await fetchCsvData(locations?.split(','));
+    const locations = locationsStr?.split(',')
+
+    const csvData = await fetchCsvData(locations);
 
     const data = csvData.map(data => {
       // format: yyyyMM
@@ -511,7 +513,11 @@ routes.get('/predict-from-csv', async (req, res) => {
     }).reduce((prev, curr) => {
       prev.populations.push(curr.population);
       prev.historicDiseases.push(curr.disease);
-      prev.organizations.push(curr.organization);
+
+      // only if location doens't already exist
+      if (!prev.organizations.find(location => curr.organization.name === location.name)) {
+        prev.organizations.push(curr.organization);
+      }
       
       return prev;
     }, {
@@ -528,11 +534,9 @@ routes.get('/predict-from-csv', async (req, res) => {
 
     const payload = buildChapPayload(
       mergeObjectsByOuPe(historicDiseases),
-      [organizations[0]],
+      organizations,
       mergeObjectsByOuPe(populations),
     );
-
-    // return res.status(200).json( payload );
 
     const modelPrediction = new ModelPredictionUsingChap(chapUrl, logger);
 
