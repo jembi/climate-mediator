@@ -540,17 +540,19 @@ export async function fetchPopulationData() {
   }
 }
 
-export async function fetchCsvData() {
+export async function fetchCsvData(locations: string[]) {
   try {
     const client = createClient({
       url,
       password,
     });
+
+    const locationsStr = locations.map(location => `'${location}'`).join(', ');
   
     const query = `
       SELECT *
       FROM marvintest5_predictions
-      WHERE woreda = 'Alebuko'
+      WHERE woreda IN (${locationsStr})
       ORDER BY year ASC, toInt32(toFloat32(doy)) ASC
     `;
 

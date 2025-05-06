@@ -461,14 +461,20 @@ routes.get('/predict-inverse', async (req, res) => {
 
 routes.get('/predict-from-csv', async (req, res) => {
   try {
-    const chapUrl = process.env.CHAP_URL as string;
+    const chapUrl = process.env.CHAP_URL as string | undefined;
+    const locations = req.query.locations as string | undefined;
 
     if (!chapUrl) {
       logger.error('Chap URL not set');
       return res.status(500).json(createErrorResponse('ENV_MISSING', 'Chap URL not set'));
     }
 
-    const csvData = await fetchCsvData();
+    if (!locations) {
+      logger.error('Locations not set');
+      return res.status(400).json(createErrorResponse('LOCATIONS_MISSING', 'Locations not set'));
+    }
+
+    const csvData = await fetchCsvData(locations?.split(','));
 
     const data = csvData.map(data => {
       // format: yyyyMM
