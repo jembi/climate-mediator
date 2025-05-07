@@ -471,58 +471,67 @@ routes.get('/predict-from-csv', async (req, res) => {
 
     if (!Array.isArray(locations) || locations.length === 0) {
       logger.error('Locations not set');
-      return res.status(400).json(createErrorResponse('LOCATIONS_MISSING', 'Locations not set'));
+      return res
+        .status(400)
+        .json(createErrorResponse('LOCATIONS_MISSING', 'Locations not set'));
     }
 
     const csvData = await fetchCsvData(locations);
 
-    const data = csvData.map(data => {
-      // format: yyyyMM
-      const period = formatYearAndDay(Number.parseInt(data.year), Number.parseInt(data.doy));
+    const data = csvData
+      .map((data) => {
+        // format: yyyyMM
+        const period = formatYearAndDay(Number.parseInt(data.year), Number.parseInt(data.doy));
 
-      const population: ClickhousePopulationData = {
-        organizational_unit: data.woreda,
-        period,
-        // @todo: get correct population value
-        value: Number.parseInt((Math.random() * 100 + 1).toString() || data.population),
-      };
-      const disease: ClickhouseHistoricalDisease = {
-        organizational_unit: data.woreda,
-        period,
-        // @todo: get correct disease value
-        value: Number.parseInt((Math.random() * 100 + 1).toString() || data.pop_at_risk),
-      };
-      const organization: ClickhouseOrganzation = {
-        code: data.wid,
-        name: data.woreda,
-        level: 2, // @todo: get correct level
-        type: 'point',
-        coordinates: [[0, 0]], // @todo: find way to set empty coordinates
-        longitude: +data.lon,
-        latitude: +data.lat,
-        timestamp: new Date().getMilliseconds(), // @todo: get correct timestamp format
-      };
+        const population: ClickhousePopulationData = {
+          organizational_unit: data.woreda,
+          period,
+          // @todo: get correct population value
+          value: Number.parseInt((Math.random() * 100 + 1).toString() || data.population),
+        };
+        const disease: ClickhouseHistoricalDisease = {
+          organizational_unit: data.woreda,
+          period,
+          // @todo: get correct disease value
+          value: Number.parseInt((Math.random() * 100 + 1).toString() || data.pop_at_risk),
+        };
+        const organization: ClickhouseOrganzation = {
+          code: data.wid,
+          name: data.woreda,
+          level: 2, // @todo: get correct level
+          type: 'point',
+          coordinates: [[0, 0]], // @todo: find way to set empty coordinates
+          longitude: +data.lon,
+          latitude: +data.lat,
+          timestamp: new Date().getMilliseconds(), // @todo: get correct timestamp format
+        };
 
-      return {
-        population,
-        disease,
-        organization,
-      };
-    }).reduce((prev, curr) => {
-      prev.populations.push(curr.population);
-      prev.historicDiseases.push(curr.disease);
+        return {
+          population,
+          disease,
+          organization,
+        };
+      })
+      .reduce(
+        (prev, curr) => {
+          prev.populations.push(curr.population);
+          prev.historicDiseases.push(curr.disease);
 
-      // only if location doens't already exist
-      if (!prev.organizations.find(location => curr.organization.name === location.name)) {
-        prev.organizations.push(curr.organization);
-      }
-      
-      return prev;
-    }, {
-      populations: [] as ClickhousePopulationData[],
-      historicDiseases: [] as ClickhouseHistoricalDisease[],
-      organizations: [] as ClickhouseOrganzation[],
-    });
+          // only if location doens't already exist
+          if (
+            !prev.organizations.find((location) => curr.organization.name === location.name)
+          ) {
+            prev.organizations.push(curr.organization);
+          }
+
+          return prev;
+        },
+        {
+          populations: [] as ClickhousePopulationData[],
+          historicDiseases: [] as ClickhouseHistoricalDisease[],
+          organizations: [] as ClickhouseOrganzation[],
+        }
+      );
 
     const { populations, historicDiseases, organizations } = data;
 
@@ -533,7 +542,7 @@ routes.get('/predict-from-csv', async (req, res) => {
     const payload = buildChapPayload(
       mergeObjectsByOuPe(historicDiseases),
       organizations,
-      mergeObjectsByOuPe(populations),
+      mergeObjectsByOuPe(populations)
     );
 
     const modelPrediction = new ModelPredictionUsingChap(chapUrl as string, logger);
