@@ -8,7 +8,11 @@ import { MediatorConfig, MinioBucketsRegistry } from '../types/mediatorConfig';
 import { RequestOptions } from '../types/request';
 import { validateBucketName } from '../utils/file-validators';
 import { downloadFileFromUrl, validateUrl } from '../utils/files';
-import { createMinioBucketListeners, ensureBucketExists, uploadFileBufferToMinio } from '../utils/minioClient';
+import {
+  createMinioBucketListeners,
+  ensureBucketExists,
+  uploadFileBufferToMinio,
+} from '../utils/minioClient';
 
 const {
   openhimUsername,
@@ -52,7 +56,7 @@ export const setupMediator = async () => {
     const openhimConfig = resolveOpenhimConfig(mediatorConfig.urn);
 
     await registerMediator(openhimConfig, mediatorConfig, (error: Error) => {
-      console.error({openhimConfig, mediatorConfig})
+      console.error({ openhimConfig, mediatorConfig });
       if (error) {
         logger.error(`Failed to register mediator: ${JSON.stringify(error)}`);
         throw error;
@@ -87,7 +91,9 @@ export const setupMediator = async () => {
               }
 
               if (!validateUrl(url)) {
-                logger.error(`Invalid URL: ${url} from bucket: ${bucket.bucket}. Cannot download file`);
+                logger.error(
+                  `Invalid URL: ${url} from bucket: ${bucket.bucket}. Cannot download file`
+                );
                 continue;
               }
 
@@ -99,7 +105,12 @@ export const setupMediator = async () => {
               try {
                 const extension = fileName.split('.').at(-1) ?? '.bin';
                 const fileData = await downloadFileFromUrl(url);
-                await uploadFileBufferToMinio(Buffer.from(fileData), fileName, bucket.bucket, extension);
+                await uploadFileBufferToMinio(
+                  Buffer.from(fileData),
+                  fileName,
+                  bucket.bucket,
+                  extension
+                );
               } catch (err) {
                 continue;
               }

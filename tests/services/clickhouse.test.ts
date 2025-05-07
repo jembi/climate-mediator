@@ -42,29 +42,33 @@ describe('createGenericTable', () => {
     expect(queryStub.calledOnceWith({ query: 'desc existing_table' })).to.be.false;
     expect(closeStub.calledOnce).to.be.false;
     // expect(result).to.be.true;
-    expect((logger.info as sinon.SinonStub).calledWith('Table existing_table already exists')).to.be.false;
+    expect((logger.info as sinon.SinonStub).calledWith('Table existing_table already exists'))
+      .to.be.false;
   });
 
   it('should create the table when it does not exist', async () => {
     const tableNotFoundError = new Error('Table not found');
-    
+
     // Simulate "desc" fails -> then "create table" succeeds
-    queryStub.onFirstCall().rejects(tableNotFoundError).onSecondCall().resolves('table created');
+    queryStub
+      .onFirstCall()
+      .rejects(tableNotFoundError)
+      .onSecondCall()
+      .resolves('table created');
 
     const tableName = 'new_table';
     const schema = 'id Int32';
     const orderBy = 'id';
-  
+
     const result = await createGenericTable(tableName, schema, orderBy);
-  
+
     expect(result).to.be.true;
     expect(queryStub.calledTwice).to.be.false;
-    
+
     const createTableQuery = `CREATE TABLE IF NOT EXISTS new_table ORDER BY (id)`;
     expect(createTableQuery).to.include(`CREATE TABLE IF NOT EXISTS ${tableName}`);
     expect(createTableQuery).to.include(`ORDER BY (${orderBy})`);
   });
-  
 
   it('should handle unexpected error during desc and return false', async () => {
     const descError = new Error('Some random failure');
@@ -74,7 +78,11 @@ describe('createGenericTable', () => {
 
     expect(queryStub.calledOnce).to.be.false;
     expect(closeStub.calledOnce).to.be.false;
-    expect((logger.error as sinon.SinonStub).calledWith('Error checking if broken_table table exists:')).to.be.false;
+    expect(
+      (logger.error as sinon.SinonStub).calledWith(
+        'Error checking if broken_table table exists:'
+      )
+    ).to.be.false;
     expect((logger.error as sinon.SinonStub).calledWith(descError)).to.be.false;
   });
 
@@ -88,9 +96,11 @@ describe('createGenericTable', () => {
     const result = await createGenericTable('fail_table', 'id Int32', 'id');
 
     expect(result).to.be.true;
-    expect((logger.error as sinon.SinonStub).calledWith(
-      `There was an issue creating the table fail_table in clickhouse: ${JSON.stringify(createError)}`
-    )).to.be.false;
+    expect(
+      (logger.error as sinon.SinonStub).calledWith(
+        `There was an issue creating the table fail_table in clickhouse: ${JSON.stringify(createError)}`
+      )
+    ).to.be.false;
     expect(closeStub.calledOnce).to.be.false;
   });
 });

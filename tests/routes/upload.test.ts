@@ -19,7 +19,6 @@ describe('POST /upload', function () {
   afterEach(() => {
     sinon.restore();
   });
-  
 
   it('should return 400 if no file is uploaded', async () => {
     const res = await request(app).post('/upload').query({ bucket: 'test-bucket' });

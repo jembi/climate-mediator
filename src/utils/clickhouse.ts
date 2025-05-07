@@ -7,7 +7,11 @@ import { cli } from 'winston/lib/winston/config';
 const { clickhouse } = getConfig();
 const { url, password } = clickhouse;
 
-export async function createTable(fields: string[], tableName: string) {
+export async function createTable(
+  s3Path: string,
+  s3Config: { accessKey: string; secretKey: string },
+  tableName: string
+) {
   const client = createClient({
     url,
     password,
@@ -28,9 +32,11 @@ export async function createTable(fields: string[], tableName: string) {
   }
 
   try {
-    logger.debug(`Creating table ${normalizedTableName} with fields ${fields.join(', ')}`);
+    logger.debug(`Creating table ${normalizedTableName}`);
+    const query = await generateDDL(s3Path, s3Config, normalizedTableName);
+    console.log(query);
     await client.query({
-      query: generateDDL(fields, normalizedTableName),
+      query: query,
     });
     logger.info(`Table ${normalizedTableName} created successfully`);
   } catch (error) {
@@ -102,8 +108,47 @@ export async function createTableFromJson(
   }
 }
 
-export function generateDDL(fields: string[], tableName: string) {
-  return `CREATE TABLE ${tableName} (table_id UUID DEFAULT generateUUIDv4(),${fields.map((field) => `${field} VARCHAR`).join(', ')}) ENGINE = MergeTree ORDER BY (table_id)`;
+export async function generateDDL(
+  s3Path: string,
+  s3Config: { accessKey: string; secretKey: string },
+  tableName: string
+) {
+  const client = createClient({
+    url,
+    password,
+  });
+
+  const descTableOutput = await client.query({
+    query: `describe Table s3('${s3Path}', '${s3Config.accessKey}', '${s3Config.secretKey}', 'CSVWithNames')`,
+  });
+
+  // Extract JSON data from the ResultSet
+  const descTableOutputJson = await descTableOutput.json();
+
+  const columns = parseDescribeTableOutput(descTableOutputJson.data);
+
+  // Construct the CREATE TABLE statement using the original data types (not nullable)
+  const columnsDefinition = columns
+    .map((col) => {
+      // Extract the base type from Nullable(Type) if present
+      const type = col.type.includes('Nullable')
+        ? col.type.replace('Nullable(', '').replace(')', '')
+        : col.type;
+
+      return `${col.name} ${type}`;
+    })
+    .join(', ');
+
+  const createTableQuery = `
+    CREATE TABLE IF NOT EXISTS \`default\`.${tableName} (
+      ${columnsDefinition}
+    ) ENGINE = MergeTree()
+    ORDER BY (year, location)
+    SETTINGS allow_nullable_key = 1
+  `;
+
+  await client.close();
+  return createTableQuery;
 }
 
 export function generateDDLFromJson(
@@ -125,7 +170,12 @@ export function generateDDLFromJson(
 
   return query;
 }
-
+function parseDescribeTableOutput(describeOutput: any[]): { name: string; type: string }[] {
+  return describeOutput.map((row) => ({
+    name: row.name.replace(/ /g, '_'),
+    type: row.type,
+  }));
+}
 export async function insertFromS3(
   tableName: string,
   s3Path: string,

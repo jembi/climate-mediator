@@ -435,12 +435,10 @@ routes.get('/predict-inverse', async (req, res) => {
       );
 
       if (uploadResult.success) {
-        return res
-          .status(200)
-          .json({
-            message: 'Prediction results uploaded successfully',
-            results: predictionResultsForMinio,
-          });
+        return res.status(200).json({
+          message: 'Prediction results uploaded successfully',
+          results: predictionResultsForMinio,
+        });
       } else {
         return res.status(500).json({ message: 'Failed to upload prediction results' });
       }
