@@ -17,6 +17,10 @@ import { registerBucket } from '../openhim/openhim';
 import { ModelPredictionUsingChap } from '../services/ModelPredictionUsingChap';
 import { buildChapPayload } from '../utils/chap';
 import {
+  ClickhouseHistoricalDisease,
+  ClickhouseOrganzation,
+  ClickhousePopulationData,
+  fetchCsvData,
   fetchHistoricalDisease,
   fetchOrganizations,
   fetchPopulationData,
@@ -38,6 +42,7 @@ import {
   uploadFileBufferToMinio,
   uploadToMinio,
 } from '../utils/minioClient';
+import { formatYearAndDay, mergeObjectsByOuPe } from '../utils/files';
 
 // Constants
 const VALID_MIME_TYPES = ['text/csv', 'application/json'] as const;
@@ -383,7 +388,7 @@ routes.post('/predict', upload.single('file'), async (req, res) => {
 
 routes.get('/predict-inverse', async (req, res) => {
   try {
-    const chapUrl = process.env.CHAP_URL;
+    const chapUrl = process.env.CHAP_URL as string;
 
     if (!chapUrl) {
       logger.error('Chap URL not set');
@@ -408,6 +413,152 @@ routes.get('/predict-inverse', async (req, res) => {
     if (predictResponse?.status === 'success') {
       // wait for the prediction job to finish
       const predictionResults = (await new Promise((resolve, reject) => {
+        const interval = setInterval(async () => {
+          const statusResponse = await modelPrediction.getStatus();
+          if (statusResponse?.status === 'idle' && statusResponse?.ready) {
+            clearInterval(interval);
+            resolve((await modelPrediction.getResult()).data);
+          }
+        }, 333);
+      })) as any;
+
+      const bucketName = sanitizeBucketName('prediction');
+      const fileName = new Date().getTime() + '.json';
+      const predictionResultsForMinio = predictionResults?.dataValues?.map((d: any) => {
+        return {
+          ...d,
+          diseaseId: predictionResults.diseaseId as string,
+        };
+      });
+
+      await ensureBucketExists(bucketName, true);
+      const uploadResult = await uploadFileBufferToMinio(
+        Buffer.from(JSON.stringify(predictionResultsForMinio)),
+        fileName,
+        bucketName,
+        'application/json'
+      );
+
+      if (uploadResult.success) {
+        return res.status(200).json({
+          message: 'Prediction results uploaded successfully',
+          results: predictionResultsForMinio,
+        });
+      } else {
+        return res.status(500).json({ message: 'Failed to upload prediction results' });
+      }
+    }
+
+    return res
+      .status(500)
+      .json({ error: 'Error predicting model. Error response from Chap API' });
+  } catch (err) {
+    logger.error('Error predicting model:');
+    logger.error(err);
+    return res.status(500).json({ error: 'An unexpected error has occured' });
+  }
+});
+
+routes.get('/predict-from-csv', async (req, res) => {
+  try {
+    const chapUrl = process.env.CHAP_URL as string | undefined;
+    const locations = req.query.locations as string[] | undefined;
+
+    if (!chapUrl) {
+      logger.error('Chap URL not set');
+      return res.status(500).json(createErrorResponse('ENV_MISSING', 'Chap URL not set'));
+    }
+
+    console.log(locations);
+
+    if (!Array.isArray(locations) || locations.length === 0) {
+      logger.error('Locations not set');
+      return res
+        .status(400)
+        .json(createErrorResponse('LOCATIONS_MISSING', 'Locations not set'));
+    }
+
+    const csvData = await fetchCsvData(locations);
+
+    const data = csvData
+      .map((data) => {
+        // format: yyyyMM
+        const period = formatYearAndDay(Number.parseInt(data.year), Number.parseInt(data.doy));
+        const location = data.location ?? data.woreda ?? '';
+
+        if (!location) {
+          logger.warning('Location not set');
+        }
+
+        const population: ClickhousePopulationData = {
+          organizational_unit: location,
+          period,
+          value: +data.population,
+        };
+        const disease: ClickhouseHistoricalDisease = {
+          organizational_unit: location,
+          period,
+          // @todo: get correct disease value
+          value: data.RDT_P_falciparum + data.RDT_P_vivax || 0,
+        };
+        const organization: ClickhouseOrganzation = {
+          code: data.wid,
+          name: location,
+          level: 2, // @todo: get correct level
+          type: 'point',
+          coordinates: [[0, 0]], // @todo: find way to set empty coordinates
+          longitude: +data.lon,
+          latitude: +data.lat,
+          timestamp: new Date().getMilliseconds(), // @todo: get correct timestamp format
+        };
+
+        return {
+          population,
+          disease,
+          organization,
+        };
+      })
+      .reduce(
+        (prev, curr) => {
+          prev.populations.push(curr.population);
+          prev.historicDiseases.push(curr.disease);
+
+          // only if location doens't already exist
+          if (
+            !prev.organizations.find((location) => curr.organization.name === location.name)
+          ) {
+            prev.organizations.push(curr.organization);
+          }
+
+          return prev;
+        },
+        {
+          populations: [] as ClickhousePopulationData[],
+          historicDiseases: [] as ClickhouseHistoricalDisease[],
+          organizations: [] as ClickhouseOrganzation[],
+        }
+      );
+
+    const { populations, historicDiseases, organizations } = data;
+
+    if (!organizations.length || !historicDiseases.length || !populations.length) {
+      return res.status(500).json({ error: 'No data found in Clickhouse' });
+    }
+
+    const payload = buildChapPayload(
+      mergeObjectsByOuPe(historicDiseases),
+      organizations,
+      mergeObjectsByOuPe(populations)
+    );
+
+    const modelPrediction = new ModelPredictionUsingChap(chapUrl as string, logger);
+
+    // start the Chap prediction job
+    const predictResponse = await modelPrediction.predict({ data: payload });
+
+    if (predictResponse?.status === 'success') {
+      // wait for the prediction job to finish
+      const predictionResults = (await new Promise((resolve, _reject) => {
         const interval = setInterval(async () => {
           const statusResponse = await modelPrediction.getStatus();
           if (statusResponse?.status === 'idle' && statusResponse?.ready) {
