@@ -57,7 +57,7 @@ export function buildChapPayload(
         };
       }),
     },
-    n_periods: 3,
+    n_periods: 72,
   };
 
   return payload;

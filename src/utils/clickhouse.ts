@@ -440,7 +440,7 @@ export interface ClickhouseHistoricalDisease {
 }
 
 export interface ClickhouseCsvData {
-  woreda: string;
+  location: string;
   year: string;
   doy: string;
   wid: string;
@@ -458,6 +458,8 @@ export interface ClickhouseCsvData {
   totprec: string;
   pop_at_risk: string;
   population: string;
+  disease_cases: string;
+  formatted_date: string;
 }
 
 export interface ClickhousePopulationData {
@@ -547,18 +549,30 @@ export async function fetchCsvData(locations: string[]) {
       password,
     });
 
-    const locationsStr = locations.map((location) => `'${location.trim()}'`).join(', ');
+    // const locationsStr = locations.map((location) => `'${location.trim()}'`).join(', ');
 
-    if (locationsStr.length === 0) {
-      throw new Error('Parsed locations string is empty');
-    }
+    // if (locationsStr.length === 0) {
+    //   throw new Error('Parsed locations string is empty');
+    // }
 
     // @todo: use correct table name
     const query = `
-      SELECT *
-      FROM marvintest5_predictions
-      WHERE woreda IN (${locationsStr})
-      ORDER BY year ASC, toInt32(toFloat32(doy)) ASC
+              SELECT 
+                  base.*,
+                  toString(toDate('2000-01-01') + (toInt32(toFloat32(base.doy)) - 1 + (base.year - 2000) * 365)) AS date_str,
+                  formatDateTime(toDate('2000-01-01') + (toInt32(toFloat32(base.doy)) - 1 + (base.year - 2000) * 365), '%Y/%m/%d') AS formatted_date,
+                  base.RDT_P_falciparum + base.RDT_P_vivax AS disease_cases
+              FROM (
+                  SELECT 
+                      *,
+                      toMonth(toDate('2000-01-01') + (toInt32(toFloat32(doy)) - 1)) AS month_number,
+                      row_number() OVER (PARTITION BY location, year, toMonth(toDate('2000-01-01') + (toInt32(toFloat32(doy)) - 1)) 
+                                        ORDER BY toInt32(toFloat32(doy)) DESC) AS row_num
+                  FROM epidemiar2025_predictions
+                  WHERE year BETWEEN 2012 AND 2018
+              ) AS base
+              WHERE base.row_num = 1
+              ORDER BY base.location, base.year, base.month_number
     `;
 
     const res = await (await client.query({ query })).json();

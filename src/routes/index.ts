@@ -469,35 +469,41 @@ routes.get('/predict-from-csv', async (req, res) => {
       return res.status(500).json(createErrorResponse('ENV_MISSING', 'Chap URL not set'));
     }
 
-    if (!Array.isArray(locations) || locations.length === 0) {
-      logger.error('Locations not set');
-      return res
-        .status(400)
-        .json(createErrorResponse('LOCATIONS_MISSING', 'Locations not set'));
-    }
+    // if (!Array.isArray(locations) || locations.length === 0) {
+    //   logger.error('Locations not set');
+    //   return res
+    //     .status(400)
+    //     .json(createErrorResponse('LOCATIONS_MISSING', 'Locations not set'));
+    // }
 
-    const csvData = await fetchCsvData(locations);
+    const csvData = await fetchCsvData(locations ?? []);
 
     const data = csvData
       .map((data) => {
         // format: yyyyMM
-        const period = formatYearAndDay(Number.parseInt(data.year), Number.parseInt(data.doy));
+        const period = (() => {
+          // Convert formatted_date to yyyyMM format
+          const date = new Date(data.formatted_date);
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          return `${year}${month}`;
+        })();
 
         const population: ClickhousePopulationData = {
-          organizational_unit: data.woreda,
-          period,
+          organizational_unit: data.location,
+          period: period,
           // @todo: get correct population value
-          value: Number.parseInt((Math.random() * 100 + 1).toString() || data.population),
+          value: Number.parseInt(data.population),
         };
         const disease: ClickhouseHistoricalDisease = {
-          organizational_unit: data.woreda,
-          period,
-          // @todo: get correct disease value
-          value: Number.parseInt((Math.random() * 100 + 1).toString() || data.pop_at_risk),
+          organizational_unit: data.location,
+          period: period,
+          // Convert string to number
+          value: Number(data.disease_cases),
         };
         const organization: ClickhouseOrganzation = {
           code: data.wid,
-          name: data.woreda,
+          name: data.location,
           level: 2, // @todo: get correct level
           type: 'point',
           coordinates: [[0, 0]], // @todo: find way to set empty coordinates
