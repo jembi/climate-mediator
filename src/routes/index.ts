@@ -473,7 +473,9 @@ routes.get('/predict-from-csv', async (req, res) => {
 
     if (!Array.isArray(locations) || locations.length === 0) {
       logger.error('Locations not set');
-      return res.status(400).json(createErrorResponse('LOCATIONS_MISSING', 'Locations not set'));
+      return res
+        .status(400)
+        .json(createErrorResponse('LOCATIONS_MISSING', 'Locations not set'));
     }
 
     const csvData = await fetchCsvData(locations);
@@ -509,26 +511,32 @@ routes.get('/predict-from-csv', async (req, res) => {
         timestamp: new Date().getMilliseconds(), // @todo: get correct timestamp format
       };
 
-      return {
-        population,
-        disease,
-        organization,
-      };
-    }).reduce((prev, curr) => {
-      prev.populations.push(curr.population);
-      prev.historicDiseases.push(curr.disease);
+        return {
+          population,
+          disease,
+          organization,
+        };
+      })
+      .reduce(
+        (prev, curr) => {
+          prev.populations.push(curr.population);
+          prev.historicDiseases.push(curr.disease);
 
-      // only if location doens't already exist
-      if (!prev.organizations.find(location => curr.organization.name === location.name)) {
-        prev.organizations.push(curr.organization);
-      }
-      
-      return prev;
-    }, {
-      populations: [] as ClickhousePopulationData[],
-      historicDiseases: [] as ClickhouseHistoricalDisease[],
-      organizations: [] as ClickhouseOrganzation[],
-    });
+          // only if location doens't already exist
+          if (
+            !prev.organizations.find((location) => curr.organization.name === location.name)
+          ) {
+            prev.organizations.push(curr.organization);
+          }
+
+          return prev;
+        },
+        {
+          populations: [] as ClickhousePopulationData[],
+          historicDiseases: [] as ClickhouseHistoricalDisease[],
+          organizations: [] as ClickhouseOrganzation[],
+        }
+      );
 
     const { populations, historicDiseases, organizations } = data;
 
@@ -539,7 +547,7 @@ routes.get('/predict-from-csv', async (req, res) => {
     const payload = buildChapPayload(
       mergeObjectsByOuPe(historicDiseases),
       organizations,
-      mergeObjectsByOuPe(populations),
+      mergeObjectsByOuPe(populations)
     );
 
     const modelPrediction = new ModelPredictionUsingChap(chapUrl as string, logger);

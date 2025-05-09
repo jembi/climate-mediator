@@ -550,13 +550,12 @@ export async function fetchCsvData(locations: string[]) {
       password,
     });
 
-    const locationsStr = locations
-      .map(location => `'${location.trim()}'`).join(', ');
+    const locationsStr = locations.map((location) => `'${location.trim()}'`).join(', ');
 
     if (locationsStr.length === 0) {
       throw new Error('Parsed locations string is empty');
     }
-  
+
     // @todo: use correct table name
     const query = `
       SELECT *
