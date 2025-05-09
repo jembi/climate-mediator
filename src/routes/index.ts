@@ -469,6 +469,8 @@ routes.get('/predict-from-csv', async (req, res) => {
       return res.status(500).json(createErrorResponse('ENV_MISSING', 'Chap URL not set'));
     }
 
+    console.log(locations)
+
     if (!Array.isArray(locations) || locations.length === 0) {
       logger.error('Locations not set');
       return res.status(400).json(createErrorResponse('LOCATIONS_MISSING', 'Locations not set'));
@@ -479,22 +481,26 @@ routes.get('/predict-from-csv', async (req, res) => {
     const data = csvData.map(data => {
       // format: yyyyMM
       const period = formatYearAndDay(Number.parseInt(data.year), Number.parseInt(data.doy));
+      const location = data.location ?? data.woreda ?? '';
+
+      if (!location) {
+        logger.warning('Location not set');
+      }
 
       const population: ClickhousePopulationData = {
-        organizational_unit: data.woreda,
+        organizational_unit: location,
         period,
-        // @todo: get correct population value
-        value: Number.parseInt((Math.random() * 100 + 1).toString() || data.population),
+        value: +data.population,
       };
       const disease: ClickhouseHistoricalDisease = {
-        organizational_unit: data.woreda,
+        organizational_unit: location,
         period,
         // @todo: get correct disease value
-        value: Number.parseInt((Math.random() * 100 + 1).toString() || data.pop_at_risk),
+        value: (data.RDT_P_falciparum + data.RDT_P_vivax) || 0,
       };
       const organization: ClickhouseOrganzation = {
         code: data.wid,
-        name: data.woreda,
+        name: location,
         level: 2, // @todo: get correct level
         type: 'point',
         coordinates: [[0, 0]], // @todo: find way to set empty coordinates

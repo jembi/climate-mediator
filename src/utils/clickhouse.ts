@@ -440,7 +440,8 @@ export interface ClickhouseHistoricalDisease {
 }
 
 export interface ClickhouseCsvData {
-  woreda: string;
+  woreda?: string;
+  location?: string
   year: string;
   doy: string;
   wid: string;
@@ -458,6 +459,8 @@ export interface ClickhouseCsvData {
   totprec: string;
   pop_at_risk: string;
   population: string;
+  RDT_P_falciparum: number;
+  RDT_P_vivax: number;
 }
 
 export interface ClickhousePopulationData {
