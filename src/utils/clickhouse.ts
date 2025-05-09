@@ -441,7 +441,7 @@ export interface ClickhouseHistoricalDisease {
 
 export interface ClickhouseCsvData {
   woreda?: string;
-  location?: string
+  location?: string;
   year: string;
   doy: string;
   wid: string;

@@ -469,7 +469,7 @@ routes.get('/predict-from-csv', async (req, res) => {
       return res.status(500).json(createErrorResponse('ENV_MISSING', 'Chap URL not set'));
     }
 
-    console.log(locations)
+    console.log(locations);
 
     if (!Array.isArray(locations) || locations.length === 0) {
       logger.error('Locations not set');
@@ -480,36 +480,37 @@ routes.get('/predict-from-csv', async (req, res) => {
 
     const csvData = await fetchCsvData(locations);
 
-    const data = csvData.map(data => {
-      // format: yyyyMM
-      const period = formatYearAndDay(Number.parseInt(data.year), Number.parseInt(data.doy));
-      const location = data.location ?? data.woreda ?? '';
+    const data = csvData
+      .map((data) => {
+        // format: yyyyMM
+        const period = formatYearAndDay(Number.parseInt(data.year), Number.parseInt(data.doy));
+        const location = data.location ?? data.woreda ?? '';
 
-      if (!location) {
-        logger.warning('Location not set');
-      }
+        if (!location) {
+          logger.warning('Location not set');
+        }
 
-      const population: ClickhousePopulationData = {
-        organizational_unit: location,
-        period,
-        value: +data.population,
-      };
-      const disease: ClickhouseHistoricalDisease = {
-        organizational_unit: location,
-        period,
-        // @todo: get correct disease value
-        value: (data.RDT_P_falciparum + data.RDT_P_vivax) || 0,
-      };
-      const organization: ClickhouseOrganzation = {
-        code: data.wid,
-        name: location,
-        level: 2, // @todo: get correct level
-        type: 'point',
-        coordinates: [[0, 0]], // @todo: find way to set empty coordinates
-        longitude: +data.lon,
-        latitude: +data.lat,
-        timestamp: new Date().getMilliseconds(), // @todo: get correct timestamp format
-      };
+        const population: ClickhousePopulationData = {
+          organizational_unit: location,
+          period,
+          value: +data.population,
+        };
+        const disease: ClickhouseHistoricalDisease = {
+          organizational_unit: location,
+          period,
+          // @todo: get correct disease value
+          value: data.RDT_P_falciparum + data.RDT_P_vivax || 0,
+        };
+        const organization: ClickhouseOrganzation = {
+          code: data.wid,
+          name: location,
+          level: 2, // @todo: get correct level
+          type: 'point',
+          coordinates: [[0, 0]], // @todo: find way to set empty coordinates
+          longitude: +data.lon,
+          latitude: +data.lat,
+          timestamp: new Date().getMilliseconds(), // @todo: get correct timestamp format
+        };
 
         return {
           population,
