@@ -384,7 +384,14 @@ export async function minioListenerHandler(bucket: string, file: string, tableNa
  */
 export async function downloadFileAndUpload(bucket: string | undefined) {
   const buckets = getOpenhimConfig();
-
+  
+  // Check if buckets array exists and has items
+  if (!buckets || !Array.isArray(buckets) || buckets.length === 0) {
+    logger.warn('No buckets configured in OpenHIM config');
+    return { error: 'No buckets configured in OpenHIM config' };
+  }
+  
+  logger.info(`Buckets: ${buckets}`);
   const tmpDir = path.join(process.cwd(), 'tmp');
   await fs.mkdir(tmpDir, { recursive: true });
 
