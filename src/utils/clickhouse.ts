@@ -135,7 +135,9 @@ export async function generateDDL(
         ? col.type.replace('Nullable(', '').replace(')', '')
         : col.type;
 
-      return `${col.name} ${type}`;
+      // Sanitize column name to only allow alphanumeric characters and underscores
+      const sanitizedName = col.name.replace(/[^a-zA-Z0-9_]/g, '_');
+      return `${sanitizedName} ${type}`;
     })
     .join(', ');
 
