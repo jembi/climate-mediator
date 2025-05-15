@@ -471,9 +471,7 @@ routes.get('/predict-from-csv', async (req, res) => {
 
     if (!table) {
       logger.error('Table name not set');
-      return res
-        .status(400)
-        .json(createErrorResponse('TABLE_MISSING', 'Table name not set'));
+      return res.status(400).json(createErrorResponse('TABLE_MISSING', 'Table name not set'));
     }
 
     const csvData = await fetchCsvData(table);
