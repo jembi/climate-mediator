@@ -551,18 +551,19 @@ export async function fetchCsvData(table: string) {
 
     const query = `
       SELECT 
-          base.*,
-          toString(toDate('2000-01-01') + (toInt32(toFloat32(base.doy)) - 1 + (base.year - 2000) * 365)) AS date_str,
-          formatDateTime(toDate('2000-01-01') + (toInt32(toFloat32(base.doy)) - 1 + (base.year - 2000) * 365), '%Y/%m/%d') AS formatted_date,
-          base.RDT_P_falciparum + base.RDT_P_vivax AS disease_cases
+        base.*,
+        toString(toDate('2000-01-01') + (toInt32(toFloat32(base.doy)) - 1 + (base.year - 2000) * 365)) AS date_str,
+        formatDateTime(toDate('2000-01-01') + (toInt32(toFloat32(base.doy)) - 1 + (base.year - 2000) * 365), '%Y/%m/%d') AS formatted_date,
+        base.RDT_P_falciparum + base.RDT_P_vivax AS disease_cases
       FROM (
-          SELECT 
-              *,
-              toMonth(toDate('2000-01-01') + (toInt32(toFloat32(doy)) - 1)) AS month_number,
-              row_number() OVER (PARTITION BY location, year, toMonth(toDate('2000-01-01') + (toInt32(toFloat32(doy)) - 1)) 
-                                ORDER BY toInt32(toFloat32(doy)) DESC) AS row_num
-          FROM ${table}
-          WHERE year BETWEEN 2012 AND 2018
+        SELECT 
+            *,
+            toMonth(toDate('2000-01-01') + (toInt32(toFloat32(doy)) - 1)) AS month_number,
+            row_number() OVER (PARTITION BY location, year, toMonth(toDate('2000-01-01') + (toInt32(toFloat32(doy)) - 1)) 
+                              ORDER BY toInt32(toFloat32(doy)) DESC) AS row_num
+        FROM ${table}
+        WHERE year BETWEEN 2012 AND 2018
+          AND (RDT_P_falciparum != 0 OR RDT_P_vivax != 0)
       ) AS base
       WHERE base.row_num = 1
       ORDER BY base.location, base.year, base.month_number
