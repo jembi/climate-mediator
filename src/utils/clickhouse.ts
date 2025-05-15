@@ -542,37 +542,31 @@ export async function fetchPopulationData() {
   }
 }
 
-export async function fetchCsvData(locations: string[]) {
+export async function fetchCsvData(table: string) {
   try {
     const client = createClient({
       url,
       password,
     });
 
-    // const locationsStr = locations.map((location) => `'${location.trim()}'`).join(', ');
-
-    // if (locationsStr.length === 0) {
-    //   throw new Error('Parsed locations string is empty');
-    // }
-
-    // @todo: use correct table name
     const query = `
-              SELECT 
-                  base.*,
-                  toString(toDate('2000-01-01') + (toInt32(toFloat32(base.doy)) - 1 + (base.year - 2000) * 365)) AS date_str,
-                  formatDateTime(toDate('2000-01-01') + (toInt32(toFloat32(base.doy)) - 1 + (base.year - 2000) * 365), '%Y/%m/%d') AS formatted_date,
-                  base.RDT_P_falciparum + base.RDT_P_vivax AS disease_cases
-              FROM (
-                  SELECT 
-                      *,
-                      toMonth(toDate('2000-01-01') + (toInt32(toFloat32(doy)) - 1)) AS month_number,
-                      row_number() OVER (PARTITION BY location, year, toMonth(toDate('2000-01-01') + (toInt32(toFloat32(doy)) - 1)) 
-                                        ORDER BY toInt32(toFloat32(doy)) DESC) AS row_num
-                  FROM epidemiar2025_predictions
-                  WHERE year BETWEEN 2012 AND 2018
-              ) AS base
-              WHERE base.row_num = 1
-              ORDER BY base.location, base.year, base.month_number
+      SELECT 
+        base.*,
+        toString(toDate('2000-01-01') + (toInt32(toFloat32(base.doy)) - 1 + (base.year - 2000) * 365)) AS date_str,
+        formatDateTime(toDate('2000-01-01') + (toInt32(toFloat32(base.doy)) - 1 + (base.year - 2000) * 365), '%Y/%m/%d') AS formatted_date,
+        base.RDT_P_falciparum + base.RDT_P_vivax AS disease_cases
+      FROM (
+        SELECT 
+            *,
+            toMonth(toDate('2000-01-01') + (toInt32(toFloat32(doy)) - 1)) AS month_number,
+            row_number() OVER (PARTITION BY location, year, toMonth(toDate('2000-01-01') + (toInt32(toFloat32(doy)) - 1)) 
+                              ORDER BY toInt32(toFloat32(doy)) DESC) AS row_num
+        FROM ${table}
+        WHERE year BETWEEN 2012 AND 2018
+          AND (RDT_P_falciparum != 0 OR RDT_P_vivax != 0)
+      ) AS base
+      WHERE base.row_num = 1
+      ORDER BY base.location, base.year, base.month_number
     `;
 
     const res = await (await client.query({ query })).json();

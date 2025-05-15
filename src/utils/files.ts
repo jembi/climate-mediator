@@ -98,8 +98,10 @@ export function mergeObjectsByOuPe(
   data: Array<{ organizational_unit: string; period: string; value: number }>
 ) {
   const res = _.chain(data)
-    .groupBy((item: { organizational_unit: string; period: string; value: number }) => 
-      `${item.organizational_unit}-${item.period}`) // Group by 'ou' and 'pe'
+    .groupBy(
+      (item: { organizational_unit: string; period: string; value: number }) =>
+        `${item.organizational_unit}-${item.period}`
+    ) // Group by 'ou' and 'pe'
     .map((group: Array<{ organizational_unit: string; period: string; value: number }>) =>
       _.mergeWith({}, ...group, (objValue: any, srcValue: any) => {
         // Customizer function to sum 'value' properties.
