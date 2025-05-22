@@ -565,14 +565,17 @@ export async function createGenericTable(
 
   try {
     logger.debug(`Now creating table ${tableName}`);
-    await client.query({
-      query: `
+
+    const query = `
         CREATE TABLE IF NOT EXISTS ${tableName} (
           ${schema}
         ) ENGINE = ${engine}()
         ORDER BY (${orderBy})
-      `,
-    });
+      `;
+
+    logger.debug(`Query: ${query}`);
+
+    await client.query({ query });
     logger.debug(`${tableName} table created successfully`);
     return true;
   } catch (error) {
@@ -582,5 +585,33 @@ export async function createGenericTable(
     return false;
   } finally {
     await client.close();
+  }
+}
+
+export async function generateInsertIntoTable(
+  tableName: string,
+  data: Record<string, any>[] | Record<string, any>
+) {
+  const client = createClient({
+    url,
+    password,
+  });
+
+  logger.debug(`Inserting data into ${tableName}`);
+
+  try {
+    await client.insert({
+      table: tableName,
+      values: data,
+      format: 'JSONEachRow',
+    });
+
+    logger.debug(`Successfully inserted data into ${tableName}`);
+  } catch (err) {
+    logger.error(
+      `There was an issue inserting data into ${tableName} in clickhouse: ${JSON.stringify(err)}`
+    );
+  } finally {
+    await client?.close();
   }
 }
