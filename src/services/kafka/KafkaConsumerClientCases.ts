@@ -1,8 +1,5 @@
 import winston from 'winston';
-import {
-  createGenericTable,
-  generateInsertIntoTable
-} from '../../utils/clickhouse';
+import { createGenericTable, generateInsertIntoTable } from '../../utils/clickhouse';
 import { KafkaConsumer } from './KafkaConsumer';
 
 export class KafkaConsumerClientCases implements KafkaConsumer {
@@ -26,7 +23,7 @@ export class KafkaConsumerClientCases implements KafkaConsumer {
       // @todo - get this dynamically?
       const tableName = 'disease_case_kafka';
       const { schema, orderBy } = this.generateSchema(bodyFromOpenhim);
-      const jsonData = bodyFromOpenhim
+      const jsonData = bodyFromOpenhim;
 
       await createGenericTable(tableName, schema, orderBy);
       await generateInsertIntoTable(tableName, jsonData);
