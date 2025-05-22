@@ -5,7 +5,7 @@ import logger from '../logger';
 
 /**
  * Kafka consumer setup
- * This function sets up a Kafka consumer that listens to topics specified in the KAFKA_TOPICS environment variable.
+ * This array sets up a Kafka consumer that listens to topics specified in the KAFKA_TOPICS environment variable.
  * It creates a consumer for each topic and processes messages using the appropriate consumer.
  * The consumers are defined in the consumers array.
  *
@@ -23,11 +23,11 @@ export async function setupKafkaConsumers() {
     const kafkaConsumer = await createKafkaConsumer();
     const eachMessage = async (messagePayload: EachMessagePayload) => {
       const { topic, partition, message } = messagePayload;
-      logger.info(
-        `Received message from topic ${topic} partition ${partition}: ${message.value?.toString()}`
-      );
-
       const messageStr = message.value?.toString('utf8') || '';
+
+      logger.info(
+        `Received message from topic ${topic} partition ${partition}: ${messageStr}`
+      );
 
       for (const consumer of consumers) {
         try {

@@ -1,5 +1,5 @@
 import winston from 'winston';
-import { createGenericTable, generateInsertIntoTable } from '../../utils/clickhouse';
+import { createGenericTable, genericInsertIntoTable } from '../../utils/clickhouse';
 import { KafkaConsumer } from './KafkaConsumer';
 
 export class KafkaConsumerClientCases implements KafkaConsumer {
@@ -20,13 +20,13 @@ export class KafkaConsumerClientCases implements KafkaConsumer {
         return;
       }
 
-      // @todo - get this dynamically?
-      const tableName = 'disease_case_kafka';
+      const topicId = await this.getTopicID();
+      const tableName = topicId.replace(/[^a-zA-Z0-9_]/g, '_');
       const { schema, orderBy } = this.generateSchema(bodyFromOpenhim);
       const jsonData = bodyFromOpenhim;
 
       await createGenericTable(tableName, schema, orderBy);
-      await generateInsertIntoTable(tableName, jsonData);
+      await genericInsertIntoTable(tableName, jsonData);
     } catch (err) {
       this.logger.error(`Error processing message in KafkaConsumerClientCases: ${err}`);
       throw err;
@@ -48,7 +48,8 @@ export class KafkaConsumerClientCases implements KafkaConsumer {
       const value = entry[key];
       let type;
 
-      if (typeof value === 'number') type = 'Int64';
+      if (typeof value === 'number' && !Number.isInteger(value)) type = 'Float64';
+      else if (typeof value === 'number') type = 'Int64';
       else if (typeof value === 'boolean') type = 'Boolean';
       else type = 'String';
 

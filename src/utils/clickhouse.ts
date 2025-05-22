@@ -588,7 +588,7 @@ export async function createGenericTable(
   }
 }
 
-export async function generateInsertIntoTable(
+export async function genericInsertIntoTable(
   tableName: string,
   data: Record<string, any>[] | Record<string, any>
 ) {

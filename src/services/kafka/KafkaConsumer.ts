@@ -10,7 +10,6 @@ export interface KafkaConsumer {
   /**
    * Consume a message from the Kafka topic.
    * This method is called when a message is received from the topic.
-   * @returns
    */
   onConsumeMessage: (messagePayload: string) => Promise<void>;
 }
