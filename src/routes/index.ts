@@ -14,7 +14,7 @@ import {
 import logger from '../logger';
 import removePrefixMiddleWare from '../middleware/remove-prefix';
 import { registerBucket } from '../openhim/openhim';
-import { ModelPredictionUsingChap } from '../services/ModelPredictionUsingChap';
+import { ModelPredictionUsingChap } from '../services/prediction/ModelPredictionUsingChap';
 import { buildChapPayload } from '../utils/chap';
 import {
   fetchHistoricalDisease,
