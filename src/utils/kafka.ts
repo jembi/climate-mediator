@@ -31,12 +31,13 @@ export async function setupKafkaConsumers() {
 
       for (const consumer of consumers) {
         try {
-          if (topic === (await consumer.getTopicID())) {
+          const topicsInterestedIn = await consumer.getTopicsInterestedIn();
+          if (topicsInterestedIn.includes(topic)) {
             await consumer.onConsumeMessage(messageStr);
           }
         } catch (err) {
           logger.error(
-            `Error processing message in consumer ${await consumer.getTopicID()}: ${err}`
+            `Error processing message in consumer ${await consumer.getTopicsInterestedIn()}: ${err}`
           );
         }
       }

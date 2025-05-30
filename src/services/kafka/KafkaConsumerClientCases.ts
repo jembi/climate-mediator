@@ -5,8 +5,8 @@ import { KafkaConsumer } from './KafkaConsumer';
 export class KafkaConsumerClientCases implements KafkaConsumer {
   constructor(private readonly logger: winston.Logger) {}
 
-  async getTopicID(): Promise<string> {
-    return 'disease-case-topic';
+  async getTopicsInterestedIn(): Promise<string[]> {
+    return ['disease-case-topic'];
   }
 
   async onConsumeMessage(messagePayloadJson: string): Promise<void> {
@@ -20,8 +20,8 @@ export class KafkaConsumerClientCases implements KafkaConsumer {
         return;
       }
 
-      const topicId = await this.getTopicID();
-      const tableName = topicId.replace(/[^a-zA-Z0-9_]/g, '_');
+      const firstTopicId = (await this.getTopicsInterestedIn()).at(0) || '';
+      const tableName = firstTopicId?.replace(/[^a-zA-Z0-9_]/g, '_');
       const { schema, orderBy } = this.generateSchema(bodyFromOpenhim);
       const jsonData = bodyFromOpenhim;
 

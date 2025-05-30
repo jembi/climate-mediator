@@ -1,11 +1,9 @@
-import { EachMessagePayload } from 'kafkajs';
-
 export interface KafkaConsumer {
   /**
-   * Get the Kafka topic ID for the consumer.
-   * The topic ID is used to subscribe to the topic and consume messages.
+   * Get the list of topics that this consumer is interested in.
+   * This method should return an array of topic names that the consumer will subscribe to.
    */
-  getTopicID: () => Promise<string>;
+  getTopicsInterestedIn: () => Promise<string[]>;
 
   /**
    * Consume a message from the Kafka topic.
