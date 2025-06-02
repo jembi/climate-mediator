@@ -23,17 +23,16 @@ export async function setupKafkaConsumers() {
     const kafkaConsumer = await createKafkaConsumer();
     const eachMessage = async (messagePayload: EachMessagePayload) => {
       const { topic, partition, message } = messagePayload;
-      const messageStr = message.value?.toString('utf8') || '';
 
       logger.info(
-        `Received message from topic ${topic} partition ${partition}: ${messageStr}`
+        `Received message from topic ${topic} partition ${partition}: ${message.value?.toString('utf8')}`
       );
 
       for (const consumer of consumers) {
         try {
           const topicsInterestedIn = await consumer.getTopicsInterestedIn();
           if (topicsInterestedIn.includes(topic)) {
-            await consumer.onConsumeMessage(messageStr);
+            await consumer.onConsumeMessage(messagePayload);
           }
         } catch (err) {
           logger.error(

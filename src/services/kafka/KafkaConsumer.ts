@@ -1,3 +1,5 @@
+import { EachMessagePayload } from 'kafkajs';
+
 export interface KafkaConsumer {
   /**
    * Get the list of topics that this consumer is interested in.
@@ -9,5 +11,5 @@ export interface KafkaConsumer {
    * Consume a message from the Kafka topic.
    * This method is called when a message is received from the topic.
    */
-  onConsumeMessage: (messagePayload: string) => Promise<void>;
+  onConsumeMessage: (messagePayload: EachMessagePayload) => Promise<void>;
 }
