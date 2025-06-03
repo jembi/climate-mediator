@@ -121,14 +121,4 @@ function setupGracefulShutdown(consumer: Consumer) {
       }
     });
   });
-
-  // signalTraps.forEach(type => {
-  // 	process.once(type, async () => {
-  // 		try {
-  // 			await consumer.disconnect()
-  // 		} finally {
-  // 			process.kill(process.pid, type)
-  // 		}
-  // 	})
-  // })
 }
