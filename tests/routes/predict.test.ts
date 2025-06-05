@@ -6,8 +6,8 @@ import path from 'path';
 import app from '../../src/index';
 import * as minioClient from '../../src/utils/minioClient';
 import logger from '../../src/logger';
-import { ModelPredictionUsingChap } from '../../src/services/ModelPredictionUsingChap';
 import axios from 'axios';
+import { ModelPredictionUsingChap } from '../../src/services/prediction/ModelPredictionUsingChap';
 
 describe('POST /synthetic-predict', function () {
   this.timeout(5000);

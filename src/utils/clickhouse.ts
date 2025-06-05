@@ -2,7 +2,6 @@ import { createClient } from '@clickhouse/client';
 import { getConfig } from '../config/config';
 import logger from '../logger';
 import { HistoricData, PopulationData } from './file-validators';
-import { cli } from 'winston/lib/winston/config';
 
 const { clickhouse } = getConfig();
 const { url, password } = clickhouse;
@@ -547,7 +546,7 @@ export async function createGenericTable(
     });
     logger.info(`Table ${tableName} already exists`);
     await client.close();
-    return false;
+    return true;
   } catch (error) {
     if (
       error instanceof Error &&
@@ -565,14 +564,17 @@ export async function createGenericTable(
 
   try {
     logger.debug(`Now creating table ${tableName}`);
-    await client.query({
-      query: `
+
+    const query = `
         CREATE TABLE IF NOT EXISTS ${tableName} (
           ${schema}
         ) ENGINE = ${engine}()
         ORDER BY (${orderBy})
-      `,
-    });
+      `;
+
+    logger.debug(`Query: ${query}`);
+
+    await client.query({ query });
     logger.debug(`${tableName} table created successfully`);
     return true;
   } catch (error) {
@@ -583,4 +585,60 @@ export async function createGenericTable(
   } finally {
     await client.close();
   }
+}
+
+export async function genericInsertIntoTable(
+  tableName: string,
+  data: Record<string, any>[] | Record<string, any>
+) {
+  const client = createClient({
+    url,
+    password,
+  });
+
+  logger.debug(`Inserting data into ${tableName}`);
+
+  try {
+    // Process data to stringify nested objects
+    const processedData = Array.isArray(data)
+      ? data.map(processNestedFields)
+      : processNestedFields(data);
+
+    logger.debug(`Processed data for insertion: ${JSON.stringify(processedData)}`);
+
+    await client.insert({
+      table: tableName,
+      values: processedData,
+      format: 'JSONEachRow',
+    });
+
+    logger.debug(`Successfully inserted data into ${tableName}`);
+  } catch (err) {
+    logger.error(
+      `There was an issue inserting data into ${tableName} in clickhouse: ${JSON.stringify(err)}`
+    );
+  } finally {
+    await client?.close();
+  }
+}
+
+/**
+ * Helper function to stringify any nested objects or arrays in data
+ * ClickHouse may have issues with deeply nested structures, so we convert them to strings
+ */
+function processNestedFields(data: Record<string, any>): Record<string, any> {
+  let record: typeof data = {};
+
+  Object.keys(data).forEach((key) => {
+    const value = data[key];
+
+    if (typeof value === 'number') record[key] = value;
+    else if (typeof value === 'boolean') record[key] = value;
+    else if (typeof value === 'string') record[key] = value;
+    else if (Array.isArray(value) || typeof value === 'object')
+      record[key] = JSON.stringify(value);
+    else record[key] = JSON.stringify(value);
+  });
+
+  return record;
 }
