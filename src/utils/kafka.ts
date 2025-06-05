@@ -1,16 +1,6 @@
 import { Consumer, ConsumerSubscribeTopics, EachMessagePayload, Kafka } from 'kafkajs';
-import { KafkaConsumerClientCases } from '../services/kafka/KafkaConsumerClientCases';
-import { KafkaConsumer } from '../services/kafka/KafkaConsumer';
 import logger from '../logger';
-
-/**
- * Kafka consumer setup
- * This array sets up a Kafka consumer that listens to topics specified in the KAFKA_TOPICS environment variable.
- * It creates a consumer for each topic and processes messages using the appropriate consumer.
- * The consumers are defined in the consumers array.
- *
- */
-const consumers: KafkaConsumer[] = [new KafkaConsumerClientCases(logger)];
+import { processMessageByTopic } from '../services/kafka/messageHandlers';
 
 /**
  * Sets up Kafka consumers based on the topics specified in the KAFKA_TOPICS environment variable.
@@ -28,17 +18,10 @@ export async function setupKafkaConsumers() {
         `Received message from topic ${topic} partition ${partition}: ${message.value?.toString('utf8')}`
       );
 
-      for (const consumer of consumers) {
-        try {
-          const topicsInterestedIn = await consumer.getTopicsInterestedIn();
-          if (topicsInterestedIn.includes(topic)) {
-            await consumer.onConsumeMessage(messagePayload);
-          }
-        } catch (err) {
-          logger.error(
-            `Error processing message in consumer ${await consumer.getTopicsInterestedIn()}: ${err}`
-          );
-        }
+      try {
+        await processMessageByTopic(messagePayload);
+      } catch (err) {
+        logger.error(`Error processing message from topic ${topic}: ${err}`);
       }
     };
 
@@ -107,7 +90,6 @@ async function createKafkaConsumer(): Promise<Consumer> {
 
 function setupGracefulShutdown(consumer: Consumer) {
   const errorTypes = ['unhandledRejection', 'uncaughtException'];
-  const signalTraps = ['SIGTERM', 'SIGINT', 'SIGUSR2'];
 
   errorTypes.forEach((type) => {
     process.on(type, async (e) => {
@@ -116,7 +98,7 @@ function setupGracefulShutdown(consumer: Consumer) {
         console.error(e);
         await consumer.disconnect();
         process.exit(0);
-      } catch (_) {
+      } catch (err) {
         process.exit(1);
       }
     });
