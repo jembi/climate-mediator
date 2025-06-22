@@ -1,5 +1,5 @@
 export type PredictRequest = {
-  data: string;
+  data: string | Object;
 };
 
 export type PredictResponse = {
