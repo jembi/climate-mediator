@@ -2,7 +2,7 @@ import chai from 'chai';
 import nock from 'nock';
 import sinon from 'sinon';
 import winston from 'winston';
-import { ModelPredictionUsingChap } from '../../src/services/ModelPredictionUsingChap';
+import { ModelPredictionUsingChap } from '../../src/services/prediction/ModelPredictionUsingChap';
 
 const { expect } = chai;
 

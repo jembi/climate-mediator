@@ -6,6 +6,7 @@ import { getMediatorConfig, initializeBuckets, setupMediator } from './openhim/o
 import routes from './routes/index';
 import { MinioBucketsRegistry } from './types/mediatorConfig';
 import { setupClickhouseTables } from './utils/clickhouse';
+import { setupKafkaConsumers } from './utils/kafka';
 
 const app = express();
 
@@ -35,6 +36,8 @@ if (require.main === module) {
     }
 
     client.close();
+
+    await setupKafkaConsumers();
 
     logger.info(`Server is running on port - ${getConfig().port}`);
     logger.debug(`Running in ${getConfig().runningMode} mode`);
