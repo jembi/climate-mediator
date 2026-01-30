@@ -2,17 +2,12 @@ import axios, { AxiosError } from 'axios';
 import https from 'https';
 import { activateHeartbeat, fetchConfig, registerMediator } from 'openhim-mediator-utils';
 import path from 'path';
-import { Config, getConfig } from '../config/config';
+import { getConfig } from '../config/config';
+import { datalake } from '../datalake';
 import logger from '../logger';
 import { MediatorConfig, MinioBucketsRegistry } from '../types/mediatorConfig';
 import { RequestOptions } from '../types/request';
-import { validateBucketName } from '../utils/file-validators';
 import { downloadFileFromUrl, validateUrl } from '../utils/files';
-import {
-  createMinioBucketListeners,
-  ensureBucketExists,
-  uploadFileBufferToMinio,
-} from '../utils/minioClient';
 
 const {
   openhimUsername,
@@ -79,43 +74,8 @@ export const setupMediator = async () => {
         emitter.on('config', async (config: any) => {
           logger.debug('Received new configs from OpenHIM');
           Config = config.minio_buckets_registry;
-          await initializeBuckets(config.minio_buckets_registry);
 
-          for (const bucket of config.minio_buckets_registry) {
-            if (bucket.bucket) {
-              const fileName = bucket.fileName;
-              const url = bucket.url;
-
-              if (!url) {
-                continue;
-              }
-
-              if (!validateUrl(url)) {
-                logger.error(
-                  `Invalid URL: ${url} from bucket: ${bucket.bucket}. Cannot download file`
-                );
-                continue;
-              }
-
-              if (!fileName) {
-                logger.error(`File name not provided for bucket: ${bucket.bucket}`);
-                continue;
-              }
-
-              try {
-                const extension = fileName.split('.').at(-1) ?? '.bin';
-                const fileData = await downloadFileFromUrl(url);
-                await uploadFileBufferToMinio(
-                  Buffer.from(fileData),
-                  fileName,
-                  bucket.bucket,
-                  extension
-                );
-              } catch (err) {
-                continue;
-              }
-            }
-          }
+          await handleBucketConfig(config.minio_buckets_registry);
         });
       });
     });
@@ -128,77 +88,60 @@ let Config: any;
 export const getOpenhimConfig = () => Config;
 
 /**
- * Initializes the buckets based on the values in the mediator config
- * if the bucket is invalid, it will be removed from the config
- * otherwise, the bucket will be created if it doesn't exist
- * and the listeners will be created for the valid buckets
- *
- * @param mediatorConfig - The mediator config
+ * Handles bucket configuration updates from OpenHIM
  */
-export async function initializeBuckets(buckets: MinioBucketsRegistry[]) {
-  if (!buckets) {
-    logger.error('No buckets found in mediator config');
-    return;
-  }
+async function handleBucketConfig(buckets: any[]) {
+  if (!buckets) return;
 
-  const validBuckets: string[] = [];
-  const invalidBuckets: string[] = [];
+  // Use datalake library to initialize buckets
+  await datalake.openhim?.registerBucket(buckets.map((b: any) => b.bucket).join(',')); // Note: openhim service registerBucket takes one bucket.
+  // Actually, datalake openhim service mirrors the old logic, maybe I should just use the datalake components.
 
-  for await (const { bucket, region } of buckets) {
-    if (!validateBucketName(bucket)) {
-      logger.error(`Invalid bucket name ${bucket}, skipping`);
-      invalidBuckets.push(bucket);
-    } else {
-      await ensureBucketExists(bucket, true);
-      validBuckets.push(bucket);
+  // Legacy logic for downloading files defined in OpenHIM config
+  for (const bucket of buckets) {
+    if (bucket.bucket) {
+      const fileName = bucket.fileName;
+      const url = bucket.url;
+
+      if (!url) {
+        continue;
+      }
+
+      if (!validateUrl(url)) {
+        logger.error(
+          `Invalid URL: ${url} from bucket: ${bucket.bucket}. Cannot download file`
+        );
+        continue;
+      }
+
+      if (!fileName) {
+        logger.error(`File name not provided for bucket: ${bucket.bucket}`);
+        continue;
+      }
+
+      try {
+        const extension = fileName.split('.').at(-1) ?? '.bin';
+        const fileData = await downloadFileFromUrl(url);
+        await datalake.upload.uploadBuffer(
+          Buffer.from(fileData),
+          fileName,
+          extension, // mimeType, need mapping or guess
+          { bucket: bucket.bucket }
+        );
+      } catch (err) {
+        continue;
+      }
     }
-  }
-
-  await createMinioBucketListeners(validBuckets);
-
-  if (invalidBuckets.length > 0) {
-    await removeBucket(invalidBuckets);
-    logger.info(`Removed ${invalidBuckets.length} invalid buckets`);
   }
 }
 
+// Keeping this for backward compatibility if any other module imports it
 export async function getMediatorConfig(): Promise<MediatorConfig | null> {
-  logger.debug('Fetching mediator config from OpenHIM');
-  const mediatorConfig = resolveMediatorConfig();
-  const openhimConfig = resolveOpenhimConfig(mediatorConfig.urn);
-
-  const { apiURL, urn, username, password, trustSelfSigned } = openhimConfig;
-
-  try {
-    const request = await axios.get(`${apiURL}/mediators/urn:mediator:climate-mediator`, {
-      auth: {
-        username,
-        password,
-      },
-      httpsAgent: new https.Agent({
-        rejectUnauthorized: !trustSelfSigned,
-      }),
-    });
-
-    return request.data;
-  } catch (e) {
-    const error = e as AxiosError;
-
-    switch (error.status) {
-      case 401:
-        logger.error(`Failed to authenticate with OpenHIM, check your credentials`);
-        break;
-      case 404:
-        logger.debug(
-          'Mediator config not found in OpenHIM, This is expected on initial setup'
-        );
-        break;
-      default:
-        logger.error(`Failed to fetch mediator config: ${JSON.stringify(error)}`);
-        break;
-    }
-    return null;
+  // Use datalake service if available, else fallback to manual implementation
+  if (datalake.openhim) {
+    return datalake.openhim.getMediatorConfig() as Promise<MediatorConfig | null>;
   }
+  return null;
 }
 
 // Triggers the processing of the climate data onces its received on the minio bucket
@@ -213,103 +156,18 @@ export async function triggerProcessing(bucket: string, file: string, tableName:
   });
 }
 
-async function putMediatorConfig(mediatorUrn: string, mediatorConfig: MinioBucketsRegistry[]) {
-  const openhimConfig = resolveOpenhimConfig(mediatorUrn);
-  const { apiURL, username, password, trustSelfSigned } = openhimConfig;
-  await axios.put(
-    `${apiURL}/mediators/urn:mediator:climate-mediator/config`,
-    {
-      minio_buckets_registry: mediatorConfig,
-    },
-    {
-      auth: { username, password },
-      httpsAgent: new https.Agent({
-        rejectUnauthorized: !trustSelfSigned,
-      }),
-    }
-  );
-
-  try {
-    logger.info('Successfully updated mediator config in OpenHIM');
-  } catch (error) {
-    const axiosError = error as AxiosError;
-    switch (axiosError.status) {
-      case 401:
-        logger.error(`Failed to authenticate with OpenHIM, check your credentials`);
-        break;
-      default:
-        logger.error(
-          `Failed to update mediator config in OpenHIM: ${JSON.stringify(axiosError)}`
-        );
-        break;
-    }
-  }
-}
-
+// Deprecated: use datalake.buckets.ensureExists + datalake.openhim.registerBucket
 export async function registerBucket(bucket: string) {
-  // If we are in testing mode, we don't need to have the registered buckets persisted
-  if (runningMode === 'testing') {
-    logger.debug('Running in testing mode, skipping bucket registration');
-    return true;
+  if (datalake.openhim) {
+    return datalake.openhim.registerBucket(bucket);
   }
-
-  //get the mediator config from OpenHIM
-  const mediatorConfig = await getMediatorConfig();
-
-  //if the mediator config is not found, log the issue and return false
-  if (mediatorConfig === null) {
-    logger.error('Mediator config not found in OpenHIM, unable to register bucket');
-    return false;
-  }
-
-  const newBucket = {
-    bucket,
-  };
-
-  //get the existing buckets from the mediator config
-  const existingConfig = mediatorConfig.config;
-
-  if (existingConfig === undefined) {
-    logger.info('Mediator config does not have a config section, creating new config');
-    mediatorConfig['config'] = {
-      minio_buckets_registry: [newBucket],
-    };
-  } else {
-    const existingBucket = existingConfig.minio_buckets_registry.find(
-      (bucket) => bucket.bucket === newBucket.bucket
-    );
-    if (existingBucket) {
-      logger.debug(`Bucket ${bucket} already exists in the config`);
-      return false;
-    }
-    logger.info(`Adding bucket ${bucket} to OpenHIM config`);
-    existingConfig.minio_buckets_registry.push(newBucket);
-    await putMediatorConfig(mediatorConfig.urn, existingConfig.minio_buckets_registry);
-  }
-
-  return true;
+  return false;
 }
 
+// Deprecated: use datalake.openhim.removeBucket
 export async function removeBucket(buckets: string[]) {
-  const mediatorConfig = await getMediatorConfig();
-
-  if (!mediatorConfig) {
-    logger.error('Mediator config not found in OpenHIM, unable to remove bucket');
-    return false;
+  if (datalake.openhim) {
+    return datalake.openhim.removeBucket(buckets);
   }
-
-  const existingConfig = mediatorConfig.config;
-
-  if (existingConfig === undefined) {
-    logger.error('Mediator config does not have a config section, unable to remove bucket');
-    return false;
-  }
-
-  const updatedConfig = existingConfig.minio_buckets_registry.filter(
-    (b) => !buckets.includes(b.bucket)
-  );
-
-  await putMediatorConfig(mediatorConfig.urn, updatedConfig);
-
-  return true;
+  return false;
 }

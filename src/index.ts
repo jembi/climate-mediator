@@ -2,9 +2,10 @@ import { createClient } from '@clickhouse/client';
 import express from 'express';
 import { getConfig } from './config/config';
 import logger from './logger';
-import { getMediatorConfig, initializeBuckets, setupMediator } from './openhim/openhim';
+import { datalake } from './datalake';
+import { getMediatorConfig, setupMediator } from './openhim/openhim';
 import routes from './routes/index';
-import { MinioBucketsRegistry } from './types/mediatorConfig';
+// import { MinioBucketsRegistry } from './types/mediatorConfig'; // Removed as its no longer used directly here
 import { setupClickhouseTables } from './utils/clickhouse';
 import { setupKafkaConsumers } from './utils/kafka';
 
@@ -45,14 +46,10 @@ if (require.main === module) {
     if (getConfig().runningMode !== 'testing' && getConfig().registerMediator) {
       await setupMediator();
 
-      const mediatorConfig = await getMediatorConfig();
-      if (mediatorConfig) {
-        await initializeBuckets(
-          mediatorConfig.config?.minio_buckets_registry as MinioBucketsRegistry[]
-        );
-      } else {
-        logger.warn('Failed to fetch mediator config, skipping bucket initialization');
-      }
+      // Initialize datalake listeners
+      await datalake.listeners.startListening(
+        Array.from(datalake.buckets.getRegisteredBuckets())
+      );
     } else {
       logger.info('Running in testing mode, skipping mediator setup');
     }

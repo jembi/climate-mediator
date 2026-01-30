@@ -18,6 +18,7 @@
   "keywords": [],
   "license": "ISC",
   "dependencies": {
+    "@jembi/openhim-datalake-lib": "file:../openhim-datalake-lib",
     "@clickhouse/client": "^1.8.0",
     "axios": "^1.7.9",
     "dotenv": "^16.4.5",

@@ -1,3 +1,10 @@
+/**
+ * Climate Mediator Routes
+ *
+ * This module now uses @jembi/openhim-datalake-lib for upload operations
+ * and bucket management. Climate-specific logic remains in this file.
+ */
+
 import { createClient } from '@clickhouse/client';
 import axios from 'axios';
 import express from 'express';
@@ -5,6 +12,7 @@ import FormData from 'form-data';
 import fs from 'fs/promises';
 import multer from 'multer';
 import { getConfig } from '../config/config';
+import { datalake } from '../datalake';
 import { saveToTmp } from '../helpers/files';
 import {
   createErrorResponse,
@@ -32,11 +40,11 @@ import {
 import {
   BucketDoesNotExistError,
   downloadFileAndUpload,
-  ensureBucketExists,
   minioListenerHandler,
   sanitizeBucketName,
-  uploadFileBufferToMinio,
   uploadToMinio,
+  uploadFileBufferToMinio,
+  ensureBucketExists,
 } from '../utils/minioClient';
 
 // Constants
@@ -63,22 +71,34 @@ const validateJsonFile = (buffer: Buffer): boolean => {
   }
 };
 
-// File handlers
+// File handlers - now using datalake library for CSV
 const handleCsvFile = async (
   files: Express.Multer.File[],
   bucket: string
 ): Promise<UploadResponse> => {
   try {
     for (const file of files) {
-      const fileUrl = await saveToTmp(file.buffer, file.originalname);
-      const uploadResult = await uploadToMinio(
-        fileUrl,
+      const result = await datalake.upload.uploadBuffer(
+        file.buffer,
         file.originalname,
-        bucket,
-        file.mimetype
+        file.mimetype,
+        { bucket, createBucketIfNotExists: false }
       );
-      await fs.unlink(fileUrl);
-      logger.debug(`Upload Successful: ${uploadResult.message}`);
+
+      if (!result.success) {
+        // Fallback to legacy method if needed
+        const fileUrl = await saveToTmp(file.buffer, file.originalname);
+        const uploadResult = await uploadToMinio(
+          fileUrl,
+          file.originalname,
+          bucket,
+          file.mimetype
+        );
+        await fs.unlink(fileUrl);
+        logger.debug(`Upload Successful: ${uploadResult.message}`);
+      } else {
+        logger.debug(`Upload Successful via datalake lib: ${result.message}`);
+      }
     }
 
     return createSuccessResponse(
@@ -100,19 +120,19 @@ const handleJsonFile = async (
   }
 
   const jsonString = file.buffer.toString().replace(/\n/g, '').replace(/\r/g, '');
-  const fileUrl = await saveToTmp(Buffer.from(jsonString), file.originalname);
-  try {
-    const uploadResult = await uploadToMinio(
-      fileUrl,
-      file.originalname,
-      bucket,
-      file.mimetype
-    );
-    await fs.unlink(fileUrl);
 
-    return uploadResult.success
-      ? createSuccessResponse('UPLOAD_SUCCESS', uploadResult.message)
-      : createErrorResponse('UPLOAD_FAILED', uploadResult.message);
+  try {
+    // Use datalake library for upload
+    const result = await datalake.upload.uploadBuffer(
+      Buffer.from(jsonString),
+      file.originalname,
+      file.mimetype,
+      { bucket, createBucketIfNotExists: false }
+    );
+
+    return result.success
+      ? createSuccessResponse('UPLOAD_SUCCESS', result.message)
+      : createErrorResponse('UPLOAD_FAILED', result.message);
   } catch (error) {
     logger.error('Error uploading file to Minio:', error);
     throw error;
@@ -125,18 +145,18 @@ const handleJsonPayload = async (
   bucket: string
 ): Promise<UploadResponse> => {
   try {
-    const uploadResult = await uploadFileBufferToMinio(
+    const result = await datalake.upload.uploadBuffer(
       Buffer.from(JSON.stringify(json)),
       file.originalname,
-      bucket,
-      file.mimetype
+      file.mimetype,
+      { bucket }
     );
 
     await insertOrganizationIntoTable(file.buffer.toString());
 
-    return uploadResult.success
-      ? createSuccessResponse('UPLOAD_SUCCESS', uploadResult.message)
-      : createErrorResponse('UPLOAD_FAILED', uploadResult.message);
+    return result.success
+      ? createSuccessResponse('UPLOAD_SUCCESS', result.message)
+      : createErrorResponse('UPLOAD_FAILED', result.message);
   } catch (err) {
     logger.error('Error uploading JSON file:', err);
     throw err;
@@ -229,7 +249,8 @@ routes.post('/synthetic-predict', async (req, res) => {
         contentType: futureFile.mimetype,
       });
 
-      await ensureBucketExists(bucket, createBucketIfNotExists);
+      // Use datalake library for bucket management
+      await datalake.buckets.ensureExists(bucket, createBucketIfNotExists);
       getPrediction(trainingFileFormData, historicFutureFormData, bucket);
 
       if (createBucketIfNotExists && getConfig().runningMode !== 'testing') {
@@ -300,10 +321,14 @@ async function getPrediction(
     const { predictions } = prediction.data;
     const stringifiedPrediction = JSON.stringify(predictions);
     const originalFileName = `prediction-result.json`;
-    const fileUrl = await saveToTmp(Buffer.from(stringifiedPrediction), originalFileName);
 
-    await uploadToMinio(fileUrl, originalFileName, bucket, 'application/json');
-    await fs.unlink(fileUrl);
+    // Use datalake library for upload
+    await datalake.upload.uploadBuffer(
+      Buffer.from(stringifiedPrediction),
+      originalFileName,
+      'application/json',
+      { bucket }
+    );
   } catch (error) {
     logger.error(`Failed to receive prediction: ${error}`);
   }
@@ -364,7 +389,7 @@ routes.post('/predict', upload.single('file'), async (req, res) => {
         };
       });
 
-      await ensureBucketExists(bucketName, true);
+      await datalake.buckets.ensureExists(bucketName, true);
 
       await handleJsonPayload(file, predictionResultsForMinio, bucketName);
 
@@ -426,12 +451,13 @@ routes.get('/predict-inverse', async (req, res) => {
         };
       });
 
-      await ensureBucketExists(bucketName, true);
-      const uploadResult = await uploadFileBufferToMinio(
+      await datalake.buckets.ensureExists(bucketName, true);
+
+      const uploadResult = await datalake.upload.uploadBuffer(
         Buffer.from(JSON.stringify(predictionResultsForMinio)),
         fileName,
-        bucketName,
-        'application/json'
+        'application/json',
+        { bucket: bucketName }
       );
 
       if (uploadResult.success) {
@@ -481,7 +507,7 @@ routes.get('/download-climate-data', async (req, res) => {
 
     const bucket = req.query.bucket as string | undefined;
     const response = await downloadFileAndUpload(bucket);
-    
+
     if (response?.error && response.error === 'No buckets configured in OpenHIM config') {
       return res.status(400).json(createErrorResponse('BUCKET_MISSING', response.error));
     }
@@ -499,6 +525,9 @@ routes.get('/download-climate-data', async (req, res) => {
   }
 });
 
+/**
+ * Upload endpoint - now using datalake library
+ */
 routes.post('/upload', upload.single('file'), async (req, res) => {
   try {
     const file = req.file;
@@ -516,7 +545,8 @@ routes.post('/upload', upload.single('file'), async (req, res) => {
       return res.status(400).json(createErrorResponse('BUCKET_MISSING', 'No bucket provided'));
     }
 
-    if (!validateBucketName(bucket)) {
+    // Use datalake library for bucket validation
+    if (!datalake.buckets.constructor.prototype.constructor['validateName'](bucket)) {
       logger.debug(`Invalid bucket name ${bucket}`);
       return res
         .status(400)
@@ -528,19 +558,24 @@ routes.post('/upload', upload.single('file'), async (req, res) => {
         );
     }
 
-    await ensureBucketExists(bucket, createBucketIfNotExists);
+    // Use datalake library for upload
+    const result = await datalake.upload.uploadBuffer(
+      file.buffer,
+      file.originalname,
+      file.mimetype,
+      {
+        bucket,
+        createBucketIfNotExists,
+        registerWithOpenHIM: createBucketIfNotExists && getConfig().runningMode !== 'testing',
+      }
+    );
 
-    const response =
-      file.mimetype === 'text/csv'
-        ? await handleCsvFile([file], bucket)
-        : await handleJsonFile(file, bucket, region);
-
-    if (createBucketIfNotExists && getConfig().runningMode !== 'testing') {
-      await registerBucket(bucket);
-    }
-
-    const statusCode = response.status === 'success' ? 201 : 400;
-    return res.status(statusCode).json(response);
+    const statusCode = result.success ? 201 : 400;
+    return res.status(statusCode).json({
+      status: result.success ? 'success' : 'error',
+      code: result.success ? 'UPLOAD_SUCCESS' : 'UPLOAD_FAILED',
+      message: result.message,
+    });
   } catch (e) {
     logger.error('Error processing upload:', e);
 
